@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/C64Bot.Vice/C64Bot.Vice.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/C64Bot.Vice.Tests/C64Bot.Vice.Tests.csproj" />
+  </Folder>
 </Solution>
