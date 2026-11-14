@@ -1,6 +1,6 @@
 # M1: Connect C# to VICE
 
-**Status:** In progress (S1–S4 done)
+**Status:** In progress (S1–S5 done)
 
 Build the binary monitor client in `C64Bot.Vice`, so the program can talk to a running VICE: read and write memory, send input and control the emulator. The bot plays in real time (D4), so M1 also has to show that talking to VICE doesn't noticeably slow the game down.
 
@@ -75,7 +75,7 @@ The order puts the risky parts early. S6 and S7 test the two assumptions real-ti
 - [x] **S2. Decode responses.** A type that reads one response (header and body) from a stream, using the body length to know where it ends. Check: unit tests decode the manual's stopped event `02 02 02 00 00 00 62 00 ff ff ff ff cf e5` (type `0x62`, no error, event, PC = `$E5CF`), and two responses sent back to back come out as two separate responses.
 - [x] **S3. Connect and ping.** A client class that opens a TCP connection to `127.0.0.1:6502`, runs a background reader, and matches responses to requests by request ID. The app connects and sends a ping. Check: the app prints that the ping was answered, and VICE's window freezes, because any command stops the emulator.
 - [x] **S4. Events and resume.** The client passes events (request ID `0xFFFFFFFF`) to the app, and gets an Exit command. Check: the app prints the register info and stopped events that follow the ping (with the PC), sends Exit, and VICE runs again.
-- [ ] **S5. Read and write memory.** Memory get and set. Check: at the `READY.` prompt, the app reads screen memory at `$0400` and prints the codes of the first characters on screen, then writes a byte there and the character appears in the top-left corner.
+- [x] **S5. Read and write memory.** Memory get and set. Check: at the `READY.` prompt, the app reads screen memory at `$0400` and prints the codes of the first characters on screen, then writes a byte there and the character appears in the top-left corner.
 
 ### Real time: the risky parts
 
@@ -99,4 +99,6 @@ The order puts the risky parts early. S6 and S7 test the two assumptions real-ti
   - A ping while running: the ping is answered, then VICE sends `RegisterInfo` (42 bytes) and `Stopped` (PC = `$E5D1`, inside the KERNAL loop that waits for a key press).
   - Exit: Exit is answered, then VICE sends `Resumed` with the same PC. VICE runs again while the app stays connected.
   - So a real-time visit ("commands, then Exit") produces three events: `RegisterInfo`, `Stopped`, `Resumed`.
+- **Memory get and set work** (seen in S5, 2026-11-14): reading `$0428`–`$044F` at the `READY.` prompt returned the start-up banner (`**** COMMODORE 64 BASIC V2 ****`, after four spaces), and writing screen code 1 to `$0400` made an A appear in the top-left corner.
+- **Bank IDs are still unchecked.** Memory get and set use bank 0, which doesn't matter at `$0400` (only RAM there). Before reading addresses where ROM or I/O can hide the RAM (`$A000`–`$BFFF`, `$D000`–`$FFFF`), ask VICE for its bank list with Banks available (`0x82`) and find out which ID shows what the CPU sees.
 - **Measurements from S6:** not yet measured.

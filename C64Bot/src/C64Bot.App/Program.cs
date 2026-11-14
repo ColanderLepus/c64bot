@@ -1,42 +1,16 @@
-﻿using System.Buffers.Binary;
-using C64Bot.Vice;
-using C64Bot.Vice.Protocol;
+﻿using C64Bot.Vice;
 
 await using var client = await MonitorClient.ConnectAsync();
 Console.WriteLine("Connected to VICE.");
 
-var ping = await client.PingAsync();
-Console.WriteLine($"Ping answered: request ID {ping.RequestId}, status {ping.Error}.");
-await PrintEventsForAsync(TimeSpan.FromSeconds(1));
+// The text screen starts at $0400: 25 rows of 40 bytes, one screen code per character.
+// The second row ($0428-$044F) holds the start-up banner.
+var bannerRow = await client.MemoryGetAsync(0x0428, 0x044F);
+Console.WriteLine($"Banner row: {string.Join(" ", bannerRow.Select(code => code.ToString("X2")))}");
 
-Console.WriteLine("VICE should be frozen now. Press Enter to resume it.");
-Console.ReadLine();
+// Screen code 1 is the letter A.
+await client.MemorySetAsync(0x0400, new byte[] { 0x01 });
+Console.WriteLine("Wrote screen code 1 (A) to $0400.");
 
-var exit = await client.ExitAsync();
-Console.WriteLine($"Exit answered: request ID {exit.RequestId}, status {exit.Error}.");
-await PrintEventsForAsync(TimeSpan.FromSeconds(1));
-
-Console.WriteLine("VICE should be running again, while still connected. Press Enter to disconnect.");
-Console.ReadLine();
-
-// Prints every event that has arrived, or arrives within the given time.
-async Task PrintEventsForAsync(TimeSpan duration)
-{
-    using var window = new CancellationTokenSource(duration);
-    try
-    {
-        await foreach (var received in client.Events.ReadAllAsync(window.Token))
-            Console.WriteLine($"  Event: {Describe(received)}");
-    }
-    catch (OperationCanceledException)
-    {
-        // The time is up.
-    }
-}
-
-static string Describe(MonitorResponse received) => received.Type switch
-{
-    ResponseType.Stopped or ResponseType.Resumed =>
-        $"{received.Type}, PC = ${BinaryPrimitives.ReadUInt16LittleEndian(received.Body.Span):X4}",
-    _ => $"{received.Type}, {received.Body.Length} bytes",
-};
+await client.ExitAsync();
+Console.WriteLine("VICE resumed. The top-left corner of its screen should show an A.");
