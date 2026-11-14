@@ -31,9 +31,14 @@ dotnet build C64Bot                          # build all projects
 dotnet test C64Bot                           # run all tests
 dotnet run --project C64Bot/src/C64Bot.App   # run the app
 
-# Start VICE with the binary monitor on (TCP port 6502) and autostart Lode Runner version A
+# Start VICE with the binary monitor on (TCP port 6502), at the BASIC READY. prompt
+C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor
+
+# Start VICE with the binary monitor on and autostart Lode Runner version A
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"
 ```
+
+VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
 
 ## Conventions
 
