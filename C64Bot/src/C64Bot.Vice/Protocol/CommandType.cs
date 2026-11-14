@@ -18,6 +18,8 @@ public enum CommandType : byte
     /// </summary>
     CheckpointSet = 0x12,
 
+    CheckpointDelete = 0x13,
+
     /// <summary>
     /// Saves a snapshot of the whole emulated machine to a file.
     /// </summary>

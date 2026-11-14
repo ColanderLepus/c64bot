@@ -18,6 +18,7 @@ Observations about the game itself, gathered while playing.
 
 - Joystick in **port 2** (according to version B's loading screen).
 - Undiggable blocks look different from diggable bricks. On level 1, the left part of the top brick row is undiggable.
+- **Interrupt routine** (seen 2026-11-14, during a level): the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. Once, it didn't run for 1.2 s. The KERNAL's jiffy clock (`$A0`–`$A2`) keeps counting during the game, so it's a reliable measure of emulated time. Not checked: whether the vector changes between levels or in the menus.
 
 ## RAM map
 

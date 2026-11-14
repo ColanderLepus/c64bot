@@ -58,7 +58,9 @@ public sealed class MonitorClient : IAsyncDisposable
     public static async Task<MonitorClient> ConnectAsync(
         string host = "127.0.0.1", int port = DefaultPort, CancellationToken cancellationToken = default)
     {
-        var tcpClient = new TcpClient();
+        // Every visit is a few small commands, each waiting for its answer, so send each one at once instead of
+        // letting TCP hold it back to batch it with later data (Nagle's algorithm).
+        var tcpClient = new TcpClient { NoDelay = true };
         try
         {
             await tcpClient.ConnectAsync(host, port, cancellationToken);
