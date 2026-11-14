@@ -1,6 +1,6 @@
 # M1: Connect C# to VICE
 
-**Status:** Not started
+**Status:** In progress (S1 done)
 
 Build the binary monitor client in `C64Bot.Vice`, so the program can talk to a running VICE: read and write memory, send input and control the emulator. The bot plays in real time (D4), so M1 also has to show that talking to VICE doesn't noticeably slow the game down.
 
@@ -71,7 +71,7 @@ The order puts the risky parts early. S6 and S7 test the two assumptions real-ti
 
 ### Foundation
 
-- [ ] **S1. Encode commands.** A type that turns a command (type, request ID, body) into bytes. Check: a unit test encodes the checkpoint example from section 13.3 of the manual and gets exactly `02 02 08 00 00 00 ad de 34 12 12 e2 fc e3 fc 01 01 04 01`.
+- [x] **S1. Encode commands.** A type that turns a command (type, request ID, body) into bytes. Check: a unit test encodes the checkpoint example from section 13.3 of the manual and gets exactly `02 02 08 00 00 00 ad de 34 12 12 e2 fc e3 fc 01 01 04 01`.
 - [ ] **S2. Decode responses.** A type that reads one response (header and body) from a stream, using the body length to know where it ends. Check: unit tests decode the manual's stopped event `02 02 02 00 00 00 62 00 ff ff ff ff cf e5` (type `0x62`, no error, event, PC = `$E5CF`), and two responses sent back to back come out as two separate responses.
 - [ ] **S3. Connect and ping.** A client class that opens a TCP connection to `127.0.0.1:6502`, runs a background reader, and matches responses to requests by request ID. The app connects and sends a ping. Check: the app prints that the ping was answered, and VICE's window freezes, because any command stops the emulator.
 - [ ] **S4. Events and resume.** The client passes events (request ID `0xFFFFFFFF`) to the app, and gets an Exit command. Check: the app prints the register info and stopped events that follow the ping (with the PC), sends Exit, and VICE runs again.

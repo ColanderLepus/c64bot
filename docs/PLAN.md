@@ -87,7 +87,7 @@ Run .NET commands from the repo root with the folder name (`dotnet test C64Bot`)
 | # | Milestone | Status | Document |
 | --- | --- | --- | --- |
 | M0 | Project setup | Done | [M0-project-setup.md](milestones/M0-project-setup.md) |
-| M1 | Connect C# to VICE | Current | [M1-connect-to-vice.md](milestones/M1-connect-to-vice.md) |
+| M1 | Connect C# to VICE | In progress | [M1-connect-to-vice.md](milestones/M1-connect-to-vice.md) |
 | M2 | Find Lode Runner's data in RAM | Not started | |
 | M3 | Snapshot and replay (solver idea 1) | Not started | |
 | M4 | Planner for levels without guards (solver idea 2) | Not started | |
