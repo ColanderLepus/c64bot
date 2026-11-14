@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/C64Bot.App/C64Bot.App.csproj" />
+    <Project Path="src/C64Bot.Libretro/C64Bot.Libretro.csproj" />
     <Project Path="src/C64Bot.Vice/C64Bot.Vice.csproj" />
   </Folder>
   <Folder Name="/tests/">
