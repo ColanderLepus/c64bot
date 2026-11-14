@@ -24,6 +24,7 @@ public sealed unsafe class LibretroCore : IDisposable
     // libretro.h: the RETRO_ENVIRONMENT_* questions this frontend answers.
     private const uint EnvironmentGetSystemDirectory = 9;
     private const uint EnvironmentSetPixelFormat = 10;
+    private const uint EnvironmentSetKeyboardCallback = 12;
     private const uint EnvironmentGetVariable = 15;
     private const uint EnvironmentSetVariables = 16;
     private const uint EnvironmentGetLogInterface = 27;
@@ -43,6 +44,9 @@ public sealed unsafe class LibretroCore : IDisposable
     private bool _initialized;
     private bool _gameLoaded;
 
+    // The core's function for key presses, which it hands over with SET_KEYBOARD_CALLBACK.
+    private delegate* unmanaged[Cdecl]<byte, uint, uint, ushort, void> _keyboardEvent;
+
     private LibretroCore(nint library) => _library = library;
 
     /// <summary>
@@ -57,7 +61,8 @@ public sealed unsafe class LibretroCore : IDisposable
     public uint ApiVersion => ((delegate* unmanaged[Cdecl]<uint>)Export("retro_api_version"))();
 
     /// <summary>
-    /// Receives a line for every environment command the core sends that this frontend doesn't answer.
+    /// Receives the core's log lines, and a line for every environment command the core sends that this
+    /// frontend doesn't answer.
     /// </summary>
     public Action<string>? Log { get; set; }
 
@@ -178,6 +183,19 @@ public sealed unsafe class LibretroCore : IDisposable
     /// </summary>
     public void RunFrame() => ((delegate* unmanaged[Cdecl]<void>)Export("retro_run"))();
 
+    /// <summary>
+    /// Presses a key on the emulated keyboard and holds it down until <see cref="ReleaseKey"/>. The core sees it
+    /// at the next frame.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The core hasn't asked for key presses.</exception>
+    public void PressKey(RetroKey key) => SendKeyboardEvent(key, down: true);
+
+    /// <summary>
+    /// Lets go of a key pressed with <see cref="PressKey"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The core hasn't asked for key presses.</exception>
+    public void ReleaseKey(RetroKey key) => SendKeyboardEvent(key, down: false);
+
     public void Dispose()
     {
         if (_gameLoaded)
@@ -216,6 +234,15 @@ public sealed unsafe class LibretroCore : IDisposable
         }
     }
 
+    private void SendKeyboardEvent(RetroKey key, bool down)
+    {
+        if (_keyboardEvent == null)
+            throw new InvalidOperationException("The core hasn't asked for key presses (SET_KEYBOARD_CALLBACK).");
+
+        // The character is for typing text and the modifiers are Shift, Ctrl and so on; neither is needed here.
+        _keyboardEvent(down ? (byte)1 : (byte)0, (uint)key, 0, 0);
+    }
+
     // The callbacks below are called from C. An exception must never escape them, or the process ends.
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -236,6 +263,10 @@ public sealed unsafe class LibretroCore : IDisposable
             case EnvironmentGetLogInterface:
                 // struct retro_log_callback holds just the function pointer.
                 *(delegate* unmanaged[Cdecl]<int, nint, void>*)data = &OnLog;
+                return 1;
+            case EnvironmentSetKeyboardCallback:
+                // struct retro_keyboard_callback holds just the function pointer.
+                core._keyboardEvent = *(delegate* unmanaged[Cdecl]<byte, uint, uint, ushort, void>*)data;
                 return 1;
             case EnvironmentSetVariables:
                 core.StoreOptionDefaults((RetroVariable*)data);
