@@ -49,6 +49,7 @@ Observations about the game itself, gathered while playing.
 | D6 | Use **version A** (`loderunner+3m/pw`). Use the trainer (invincibility, C= level skip, unlimited lives) during development; the bot's real runs answer N/N. | Clean display, unlike version C. The trainer makes testing much easier: the planner can be tested on real levels without guards killing the player, and any level can be reached quickly. |
 | D7 | Target **.NET 10** | The only SDK installed (10.0.402), and the current long-term-support release. |
 | D8 | Write **our own binary monitor client** instead of using a third-party library | The protocol is small (a short header plus a command per message, and we need about a dozen commands). No dependency on a library keeping up with VICE versions. Existing libraries can still be read for reference. |
+| D9 | **Repository layout:** the solution lives in `C64Bot/`, documentation in `docs/`, and `CLAUDE.md` in `.claude/`. See Repository layout below. | Owner's preference: the solution root is not the repo root, and documentation doesn't live in the solution. The repo root holds only repo-wide files. |
 
 ## Architecture
 
@@ -72,6 +73,27 @@ flowchart LR
 - `IPlayer.Decide(GameState) -> Input` (exact shape to be settled in M3/M4).
 - A RAM-compare tool (diff memory between frames) is part of the emulator tooling, for finding game data in this game and future ones.
 
+### Repository layout
+
+```text
+vice-lode-runner/                 repo root: only repo-wide files
+├── .claude/
+│   ├── CLAUDE.md                 guide for Claude sessions (committed)
+│   └── settings.local.json       personal Claude Code settings (ignored by Git)
+├── .gitignore
+├── docs/
+│   └── PLAN.md                   this file
+└── C64Bot/                       solution root
+    ├── C64Bot.slnx
+    ├── Directory.Build.props     shared build settings for every project
+    ├── src/
+    │   └── C64Bot.Vice/          emulator layer (binary monitor client)
+    └── tests/
+        └── C64Bot.Vice.Tests/
+```
+
+Run .NET commands from the repo root with the folder name (`dotnet test C64Bot`), or from inside `C64Bot/` without it.
+
 ## Milestones
 
 ### M0: Project setup
@@ -91,8 +113,9 @@ Done one step at a time, checking each step before starting the next. Project na
 - [x] **S1. Solution and shared settings.** Create `src/` and `tests/` folders, the solution file `C64Bot.slnx`, a .NET `.gitignore`, and a `Directory.Build.props` that makes every project target `net10.0` with nullable reference types and implicit usings on. Check: `dotnet sln list` runs and shows no projects yet.
 - [x] **S2. Emulator library.** Class library `src/C64Bot.Vice`, added to the solution. This is where the binary monitor client will live. Check: `dotnet build` succeeds.
 - [x] **S3. Test project.** xUnit project `tests/C64Bot.Vice.Tests`, referencing the emulator library, with one placeholder test. Check: `dotnet test` passes.
-- [ ] **S4. Console app.** `src/C64Bot.App`, referencing the emulator library, printing one line. Check: `dotnet run --project src/C64Bot.App` prints it.
-- [ ] **S5. Commands in CLAUDE.md.** Add the build, test and run commands so future sessions know them.
+- [x] **R. Restructure.** Moved the solution, `Directory.Build.props`, `src/` and `tests/` into `C64Bot/`, `PLAN.md` into `docs/` and `CLAUDE.md` into `.claude/` (D9). The paths in S1–S3 are from before this move. Check: `git status` shows only renames, and `dotnet test C64Bot` passes.
+- [ ] **S4. Console app.** `C64Bot/src/C64Bot.App`, referencing the emulator library, printing one line. Check: `dotnet run --project C64Bot/src/C64Bot.App` prints it.
+- [ ] **S5. Commands in CLAUDE.md.** Add the build, test and run commands to `.claude/CLAUDE.md` so future sessions know them.
 
 ### M1: Connect C# to VICE
 
@@ -155,4 +178,4 @@ Fill this in during M2.
 
 ## Session log
 
-- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5. Next: S1.
+- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Next: S4.
