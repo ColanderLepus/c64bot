@@ -27,7 +27,7 @@ This is the overview: status, decisions, architecture, milestones, open question
 | D1 | Language: C# / .NET | Owner's choice. |
 | D2 | Talk to VICE through its **binary monitor protocol** (`x64sc -binarymonitor`, TCP port 6502) | One connection covers memory read/write, joystick and keyboard input, screen grab, snapshots, breakpoints and pause/step/resume. No screen capture or fake keypresses into a window. |
 | D3 | Read game state from **C64 RAM**. Template matching on the framebuffer is the fallback. | RAM gives exact data with nothing to misread. C64 output is pixel-exact and Lode Runner tiles sit on a fixed 28×16 grid, so the fallback would also be reliable. |
-| D4 | Run the bot **in step with the game**: break once per frame, read state, decide, set input, resume. | Every run can be reproduced exactly, and a slow solver only slows the game down instead of losing it. |
+| D4 | The bot plays **in real time**: VICE runs at full speed, and the bot reads state and sets the joystick about 50 times a second. It has to keep up, like a human. **Lockstep** (stop every frame, read, decide, resume) exists only as a debugging tool. *(Changed 2026-11-14: was lockstep as the normal mode.)* | Owner's choice: a human with a joystick doesn't slow the game down, and the bot shouldn't either. Each monitor command still freezes VICE briefly, but emulated time doesn't advance while frozen, so the game itself is unaffected. M1 measures how long a freeze takes. Lockstep stays useful for stepping through a strange move frame by frame. |
 | D5 | Three layers: emulator connection, game adapter, solver (behind an `IPlayer` interface) | The emulator layer can be reused for other games, and each solver idea is just another `IPlayer` implementation. |
 | D6 | Use **version A** (`loderunner+3m/pw`). Use the trainer (invincibility, C= level skip, unlimited lives) during development; the bot's real runs answer N/N. | Clean display, unlike version C. The trainer makes testing much easier: the planner can be tested on real levels without guards killing the player, and any level can be reached quickly. |
 | D7 | Target **.NET 10** | The only SDK installed (10.0.402), and the current long-term-support release. |
@@ -55,6 +55,7 @@ flowchart LR
 ```
 
 - `IPlayer.Decide(GameState) -> Input` (exact shape to be settled in M3/M4).
+- The loop around the solver has two modes (D4): **real time** (normal play; the solver must decide within its time budget) and **lockstep** (debugging; one frame at a time). Solvers don't know which mode they run in.
 - A RAM-compare tool (diff memory between frames) is part of the emulator tooling, for finding game data in this game and future ones.
 
 ### Repository layout
@@ -125,7 +126,7 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 
 ### M6: Experiments
 
-- LLM as strategist on top of the planner (latency doesn't matter because the bot controls time)
+- LLM as strategist on top of the planner. In real time an LLM is too slow to steer, so it would set goals now and then while the planner does the moving.
 - Snapshot search: use the emulator itself as the simulator (try moves, check the result, restore)
 - Reinforcement learning (unlikely to pay off: rewards are rare and the game needs planning)
 
@@ -139,4 +140,4 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 
 ## Session log
 
-- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Did S4 and S5, which completes M0. Split the plan into this overview, one document per milestone and a Lode Runner reference (D10). Broke M1 into steps S1–S10, based on chapter 13 of the VICE manual. Next: M1 S1 (encode commands).
+- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Did S4 and S5, which completes M0. Split the plan into this overview, one document per milestone and a Lode Runner reference (D10). Broke M1 into steps, based on chapter 13 of the VICE manual. Changed D4: the bot plays in real time, and lockstep is only a debugging tool. Reordered M1 to test the risky parts (the cost of a freeze, joystick input) early. Next: M1 S1 (encode commands).
