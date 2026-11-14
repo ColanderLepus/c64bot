@@ -8,6 +8,7 @@ public class MonitorCommandTests
     public void Encode_ManualCheckpointExample_MatchesManualBytes()
     {
         // Arrange
+        // Section 13.3 of the VICE manual: a temporary exec checkpoint on $FCE2-$FCE3.
         byte[] body = [0xE2, 0xFC, 0xE3, 0xFC, 0x01, 0x01, 0x04, 0x01];
         var command = new MonitorCommand(CommandType.CheckpointSet, 0x1234DEAD, body);
 

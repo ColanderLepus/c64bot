@@ -41,4 +41,12 @@ C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROM
 - The .NET solution lives in `C64Bot/`, not in the repo root. Documentation lives in `docs/`. Keep the repo root for repo-wide files only.
 - Markdown files follow markdownlint style: a blank line after headings and around lists.
 - Names in code follow the VICE manual's terminology (for example command, response, body, request ID, memspace, checkpoint). This always wins over other naming arguments, so don't debate it: just use VICE's term.
+- XML documentation (`<summary>` and friends):
+  - Every public type gets a `<summary>`: one sentence saying what it is.
+  - Public members get one only when the name isn't enough (what it really does, an edge case, why it exists). No summaries that just repeat the name, like "Gets the request ID."
+  - Enum values get one only when the value needs explaining.
+  - No XML docs on private code or tests. Private code gets a `//` comment if something needs explaining; tests are explained by their names and Arrange/Act/Assert sections.
+  - Write for a reader who knows C# but not VICE or the C64. Explain terms like binary monitor, event, request ID, snapshot or checkpoint in plain words where a type depends on them. The manual is for details, not for basic understanding: point to the section in `<remarks>`.
+  - Style: a type's summary is a noun phrase ("A command for VICE's binary monitor ..."), a method's starts with a verb ("Reads exactly one response ..."). Details that don't fit in one sentence go in `<remarks>`. Use `<param>` on constructors when a parameter needs explaining, and `<exception>` for exceptions a caller should handle.
+  - Not enforced by the compiler (no CS1591 warnings); check it when writing or reviewing code.
 - Tests are split into clear `// Arrange`, `// Act` and `// Assert` sections wherever possible. Act is a separate step, not folded into the assertion.
