@@ -1,2 +1,5 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/C64Bot.Vice/C64Bot.Vice.csproj" />
+  </Folder>
 </Solution>
