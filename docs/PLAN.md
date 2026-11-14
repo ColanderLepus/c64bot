@@ -87,6 +87,7 @@ vice-lode-runner/                 repo root: only repo-wide files
     ├── C64Bot.slnx
     ├── Directory.Build.props     shared build settings for every project
     ├── src/
+    │   ├── C64Bot.App/           console app that runs the bot
     │   └── C64Bot.Vice/          emulator layer (binary monitor client)
     └── tests/
         └── C64Bot.Vice.Tests/
@@ -114,7 +115,7 @@ Done one step at a time, checking each step before starting the next. Project na
 - [x] **S2. Emulator library.** Class library `src/C64Bot.Vice`, added to the solution. This is where the binary monitor client will live. Check: `dotnet build` succeeds.
 - [x] **S3. Test project.** xUnit project `tests/C64Bot.Vice.Tests`, referencing the emulator library, with one placeholder test. Check: `dotnet test` passes.
 - [x] **R. Restructure.** Moved the solution, `Directory.Build.props`, `src/` and `tests/` into `C64Bot/`, `PLAN.md` into `docs/` and `CLAUDE.md` into `.claude/` (D9). The paths in S1–S3 are from before this move. Check: `git status` shows only renames, and `dotnet test C64Bot` passes.
-- [ ] **S4. Console app.** `C64Bot/src/C64Bot.App`, referencing the emulator library, printing one line. Check: `dotnet run --project C64Bot/src/C64Bot.App` prints it.
+- [x] **S4. Console app.** `C64Bot/src/C64Bot.App`, referencing the emulator library, printing one line. Check: `dotnet run --project C64Bot/src/C64Bot.App` prints it.
 - [ ] **S5. Commands in CLAUDE.md.** Add the build, test and run commands to `.claude/CLAUDE.md` so future sessions know them.
 
 ### M1: Connect C# to VICE
