@@ -2,13 +2,13 @@
 
 A standalone C# program that plays Commodore 64 games running in the VICE emulator. The first target is **Lode Runner**.
 
-This file records the plan, the decisions made so far and current progress, so work can continue across sessions. Update it whenever a milestone moves forward or a decision changes.
+This is the overview: status, decisions, architecture, milestones, open questions and session log. Each milestone that has started has its own document in [milestones/](milestones/) with its steps and notes. Facts about the game live in [lode-runner.md](lode-runner.md).
 
 ---
 
 ## Status
 
-**Current milestone:** M1 (connect C# to VICE)
+**Current milestone:** M1 (connect C# to VICE), see [M1-connect-to-vice.md](milestones/M1-connect-to-vice.md)
 **Last updated:** 2026-11-14
 
 ---
@@ -18,24 +18,7 @@ This file records the plan, the decisions made so far and current progress, so w
 | What | Where | Notes |
 | --- | --- | --- |
 | VICE 3.10 | `C:\Tools\C64\VICE-3.10` | Use `bin\x64sc.exe` (the cycle-exact C64 emulator). `bin\c1541.exe` lists and extracts disk images. The manual is `doc\vice.pdf`. |
-| Lode Runner disk | `C:\Emulation\ROMs\C64\Lode Runner.d64` | A 35-track image from c64hq.com holding several versions. See the disk contents below. |
-
-The disk holds **three versions** of the game (files from `c1541 -list`, load addresses from the file headers):
-
-| Version | Files | What we know |
-| --- | --- | --- |
-| A | `loderunner+3m/pw` (63 blocks, $0801) | First file on the disk, so `LOAD"*",8,1` (or autostarting the image without a file name) loads this one. Starts with a trainer menu: `UNLIMITED LIVES (Y/N)?`, `TOTAL INVINCIBILITY (Y/N)?`, a note that the C= key skips levels during the game, then press SPACE. Tried 2026-11-14 with Y/Y: the status line is clean. |
-| B | `loderunner i` (3 blocks, $0801) + `it` (89 blocks, $6000) + `db` (12 blocks, $1400) | Crack by "M & J", January 1984. `loderunner i` is a BASIC loader: it shows a loading screen ("plug joystick into port #2"), then a small machine-code routine (POKEd into screen memory and hidden by black-on-black colour) loads `it` and `db` and jumps to $6000. So `it` is the main program and `db` is data of some kind. |
-| C | `lode runner` (73 blocks, $0801) | Tried first (2026-11-14, `-autostart "...Lode Runner.d64:lode runner"`). Plays fine, but the status line at the bottom has stray white pixels. |
-
-Pick one version and stick with it, because RAM addresses can differ between versions.
-
-## Lode Runner notes
-
-Observations about the game itself, gathered while playing.
-
-- Joystick in **port 2** (according to version B's loading screen).
-- Undiggable blocks look different from diggable bricks. On level 1, the left part of the top brick row is undiggable.
+| Lode Runner disk | `C:\Emulation\ROMs\C64\Lode Runner.d64` | Holds three versions of the game; we use version A. See [lode-runner.md](lode-runner.md). |
 
 ## Decisions
 
@@ -50,6 +33,7 @@ Observations about the game itself, gathered while playing.
 | D7 | Target **.NET 10** | The only SDK installed (10.0.402), and the current long-term-support release. |
 | D8 | Write **our own binary monitor client** instead of using a third-party library | The protocol is small (a short header plus a command per message, and we need about a dozen commands). No dependency on a library keeping up with VICE versions. Existing libraries can still be read for reference. |
 | D9 | **Repository layout:** the solution lives in `C64Bot/`, documentation in `docs/`, and `CLAUDE.md` in `.claude/`. See Repository layout below. | Owner's preference: the solution root is not the repo root, and documentation doesn't live in the solution. The repo root holds only repo-wide files. |
+| D10 | **One document per milestone** in `docs/milestones/`, created when the milestone starts. This file stays the overview. Game facts go in `docs/lode-runner.md`. | One plan file was getting long, and each milestone adds its own step list. Decisions and the session log stay here only, so they can't drift apart across files. |
 
 ## Architecture
 
@@ -82,7 +66,9 @@ vice-lode-runner/                 repo root: only repo-wide files
 │   └── settings.local.json       personal Claude Code settings (ignored by Git)
 ├── .gitignore
 ├── docs/
-│   └── PLAN.md                   this file
+│   ├── PLAN.md                   this file: the overview
+│   ├── lode-runner.md            game reference: versions, notes, RAM map
+│   └── milestones/               one document per started milestone
 └── C64Bot/                       solution root
     ├── C64Bot.slnx
     ├── Directory.Build.props     shared build settings for every project
@@ -97,77 +83,51 @@ Run .NET commands from the repo root with the folder name (`dotnet test C64Bot`)
 
 ## Milestones
 
-### M0: Project setup
+| # | Milestone | Status | Document |
+| --- | --- | --- | --- |
+| M0 | Project setup | Done | [M0-project-setup.md](milestones/M0-project-setup.md) |
+| M1 | Connect C# to VICE | Current | [M1-connect-to-vice.md](milestones/M1-connect-to-vice.md) |
+| M2 | Find Lode Runner's data in RAM | Not started | |
+| M3 | Snapshot and replay (solver idea 1) | Not started | |
+| M4 | Planner for levels without guards (solver idea 2) | Not started | |
+| M5 | Guards | Not started | |
+| M6 | Experiments | Not started | |
 
-- [x] Create repo and plan document
-- [x] Check which VICE version is installed (binary monitor needs 3.5 or later): VICE 3.10
-- [x] Get a Lode Runner image (disk or cartridge): `Lode Runner.d64`, see Environment
-- [x] Choose which version on the disk to use: version A (D6)
-- [x] Choose a .NET version: .NET 10 (D7)
-- [x] Decide: our own binary monitor client or an existing library: our own (D8)
-- [x] Create the solution skeleton (steps below)
-
-#### Solution skeleton
-
-Done one step at a time, checking each step before starting the next. Project names use the prefix `C64Bot` (confirmed in S1). The Lode Runner game library (`C64Bot.LodeRunner`) is added later, in M2, when there is something to put in it.
-
-- [x] **S1. Solution and shared settings.** Create `src/` and `tests/` folders, the solution file `C64Bot.slnx`, a .NET `.gitignore`, and a `Directory.Build.props` that makes every project target `net10.0` with nullable reference types and implicit usings on. Check: `dotnet sln list` runs and shows no projects yet.
-- [x] **S2. Emulator library.** Class library `src/C64Bot.Vice`, added to the solution. This is where the binary monitor client will live. Check: `dotnet build` succeeds.
-- [x] **S3. Test project.** xUnit project `tests/C64Bot.Vice.Tests`, referencing the emulator library, with one placeholder test. Check: `dotnet test` passes.
-- [x] **R. Restructure.** Moved the solution, `Directory.Build.props`, `src/` and `tests/` into `C64Bot/`, `PLAN.md` into `docs/` and `CLAUDE.md` into `.claude/` (D9). The paths in S1–S3 are from before this move. Check: `git status` shows only renames, and `dotnet test C64Bot` passes.
-- [x] **S4. Console app.** `C64Bot/src/C64Bot.App`, referencing the emulator library, printing one line. Check: `dotnet run --project C64Bot/src/C64Bot.App` prints it.
-- [x] **S5. Commands in CLAUDE.md.** Add the build, test and run commands to `.claude/CLAUDE.md` so future sessions know them.
-
-### M1: Connect C# to VICE
-
-- [ ] Connect and ping
-- [ ] Read and write memory
-- [ ] Pause, step and resume; break once per frame (breakpoint on the main loop or interrupt handler)
-- [ ] Set joystick state and send keys
-- [ ] Grab the screen
-- [ ] Save and load snapshots
+Rough scope of the milestones that haven't started yet. Each list moves into its own document when the milestone starts.
 
 ### M2: Find Lode Runner's data in RAM
 
-- [ ] Build the RAM-compare tool
-- [ ] Level grid (28×16) and tile codes
-- [ ] Player position, including position within a tile
-- [ ] Guard positions and states
-- [ ] Gold remaining, lives, level number
-- [ ] Hole/dig state and refill timers
-- [ ] Find out how the C64 version maps digging (fire button plus direction, or keys)
-- [ ] Record findings in the RAM map below
+- Build the RAM-compare tool
+- Level grid (28×16) and tile codes
+- Player position, including position within a tile
+- Guard positions and states
+- Gold remaining, lives, level number
+- Hole/dig state and refill timers
+- Find out how the C64 version maps digging (fire button plus direction, or keys)
+- Record findings in the RAM map in [lode-runner.md](lode-runner.md)
 
 ### M3: Snapshot and replay (solver idea 1)
 
-- [ ] Record inputs per frame while a human plays
-- [ ] Replay them from the same snapshot and confirm the result is identical
+- Record inputs per frame while a human plays
+- Replay them from the same snapshot and confirm the result is identical
 
 ### M4: Planner for levels without guards (solver idea 2)
 
-- [ ] Model the level as a graph using the movement rules (walk, climb, rope, fall, dig and drop)
-- [ ] BFS/A* to each piece of gold, then to the exit ladder
-- [ ] Debug view showing the grid and the planned path
-- [ ] Test on real levels with the trainer's invincibility on, using C= to skip to the level under test
+- Model the level as a graph using the movement rules (walk, climb, rope, fall, dig and drop)
+- BFS/A* to each piece of gold, then to the exit ladder
+- Debug view showing the grid and the planned path
+- Test on real levels with the trainer's invincibility on, using C= to skip to the level under test
 
 ### M5: Guards
 
-- [ ] Avoid guards
-- [ ] Trap guards in holes, taking refill timing into account
+- Avoid guards
+- Trap guards in holes, taking refill timing into account
 
 ### M6: Experiments
 
-- [ ] LLM as strategist on top of the planner (latency doesn't matter because the bot controls time)
-- [ ] Snapshot search: use the emulator itself as the simulator (try moves, check the result, restore)
-- [ ] Reinforcement learning (unlikely to pay off: rewards are rare and the game needs planning)
-
-## Lode Runner RAM map
-
-Fill this in during M2.
-
-| Address | Size | Meaning | Notes |
-|---------|------|---------|-------|
-|         |      |         |       |
+- LLM as strategist on top of the planner (latency doesn't matter because the bot controls time)
+- Snapshot search: use the emulator itself as the simulator (try moves, check the result, restore)
+- Reinforcement learning (unlikely to pay off: rewards are rare and the game needs planning)
 
 ## Open questions
 
@@ -179,4 +139,4 @@ Fill this in during M2.
 
 ## Session log
 
-- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Did S4 and S5, which completes M0. Next: break M1 into small steps, starting with connect and ping.
+- **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Did S4 and S5, which completes M0. Split the plan into this overview, one document per milestone and a Lode Runner reference (D10). Next: break M1 into small steps, starting with connect and ping.
