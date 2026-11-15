@@ -21,6 +21,9 @@ public sealed unsafe class LibretroCore : IDisposable
     // libretro.h: RETRO_MEMORY_SYSTEM_RAM.
     private const uint MemorySystemRam = 2;
 
+    // libretro.h: RETRO_PIXEL_FORMAT_XRGB8888, 4 bytes per pixel.
+    private const int PixelFormatXrgb8888 = 1;
+
     // libretro.h: the RETRO_ENVIRONMENT_* questions this frontend answers.
     private const uint EnvironmentGetSystemDirectory = 9;
     private const uint EnvironmentSetPixelFormat = 10;
@@ -80,6 +83,11 @@ public sealed unsafe class LibretroCore : IDisposable
         _options.ToDictionary(option => option.Key, option => Marshal.PtrToStringUTF8(option.Value) ?? "");
 
     /// <summary>
+    /// Receives every finished picture, on the thread that calls <see cref="RunFrame"/>.
+    /// </summary>
+    public VideoFrameHandler? VideoFrame { get; set; }
+
+    /// <summary>
     /// The number of pictures the core has finished, usually one per frame.
     /// </summary>
     public int VideoFrames { get; private set; }
@@ -120,8 +128,11 @@ public sealed unsafe class LibretroCore : IDisposable
     /// </summary>
     /// <param name="systemDirectory">A folder where the core can find and keep its own files, such as ROMs.</param>
     /// <param name="saveDirectory">A folder where the core can save files belonging to games.</param>
+    /// <param name="options">Core options to use instead of their defaults, by key.</param>
     /// <exception cref="InvalidOperationException">Another core is already running in this process.</exception>
-    public void Initialize(string systemDirectory, string saveDirectory)
+    /// <exception cref="ArgumentException">The core has no option with one of the keys.</exception>
+    public void Initialize(
+        string systemDirectory, string saveDirectory, IReadOnlyDictionary<string, string>? options = null)
     {
         if (s_current is not null)
             throw new InvalidOperationException("Only one libretro core can run in a process at a time.");
@@ -142,6 +153,10 @@ public sealed unsafe class LibretroCore : IDisposable
             Export("retro_set_input_poll"))(&OnInputPoll);
         ((delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, uint, uint, uint, short>, void>)
             Export("retro_set_input_state"))(&OnInputState);
+
+        // The core announced its options in retro_set_environment and reads them in retro_init.
+        foreach (var (key, value) in options ?? new Dictionary<string, string>())
+            SetOption(key, value);
 
         ((delegate* unmanaged[Cdecl]<void>)Export("retro_init"))();
         _initialized = true;
@@ -234,6 +249,15 @@ public sealed unsafe class LibretroCore : IDisposable
         }
     }
 
+    private void SetOption(string key, string value)
+    {
+        if (!_options.Remove(key, out var old))
+            throw new ArgumentException($"The core has no option called {key}.", nameof(key));
+
+        Marshal.FreeCoTaskMem(old);
+        _options[key] = Marshal.StringToCoTaskMemUTF8(value);
+    }
+
     private void SendKeyboardEvent(RetroKey key, bool down)
     {
         if (_keyboardEvent == null)
@@ -258,8 +282,8 @@ public sealed unsafe class LibretroCore : IDisposable
                 *(nint*)data = core._saveDirectory;
                 return 1;
             case EnvironmentSetPixelFormat:
-                // T3 doesn't look at the pictures yet, so any format will do.
-                return 1;
+                // Only XRGB8888 is accepted, the format VideoFrameHandler promises.
+                return *(int*)data == PixelFormatXrgb8888 ? (byte)1 : (byte)0;
             case EnvironmentGetLogInterface:
                 // struct retro_log_callback holds just the function pointer.
                 *(delegate* unmanaged[Cdecl]<int, nint, void>*)data = &OnLog;
@@ -296,6 +320,20 @@ public sealed unsafe class LibretroCore : IDisposable
         core.VideoFrames++;
         core.FrameWidth = (int)width;
         core.FrameHeight = (int)height;
+
+        // data is null when the picture is the same as the last one.
+        if (data == null || core.VideoFrame is not { } handler)
+            return;
+
+        try
+        {
+            var length = (int)pitch * ((int)height - 1) + (int)width * 4;
+            handler(new ReadOnlySpan<byte>(data, length), (int)width, (int)height, (int)pitch);
+        }
+        catch (Exception exception)
+        {
+            core.Log?.Invoke($"The video frame handler failed: {exception.Message}");
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
