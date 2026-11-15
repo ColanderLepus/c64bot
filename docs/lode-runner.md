@@ -8,9 +8,25 @@ What we know about the C64 Lode Runner we use: the versions on the disk, how the
 
 | Version | Files | What we know |
 | --- | --- | --- |
-| A | `loderunner+3m/pw` (63 blocks, $0801) | First file on the disk, so `LOAD"*",8,1` (or autostarting the image without a file name) loads this one. Starts with a trainer menu: `UNLIMITED LIVES (Y/N)?`, `TOTAL INVINCIBILITY (Y/N)?`, a note that the C= key skips levels during the game, then press SPACE. Tried 2026-11-14 with Y/Y: the status line is clean. |
+| A | `loderunner+3m/pw` (63 blocks, $0801) | First file on the disk, so `LOAD"*",8,1` (or autostarting the image without a file name) loads this one. Starts with a trainer menu: `UNLIMITED LIVES (Y/N)?`, `TOTAL INVINCIBILITY (Y/N)?`, a note that the C= key skips levels during the game, then press SPACE. Tried 2026-11-14 with Y/Y: the status line is clean. In memory it's the original game at the original addresses, with three changes (see Trainer below). |
 | B | `loderunner i` (3 blocks, $0801) + `it` (89 blocks, $6000) + `db` (12 blocks, $1400) | Crack by "M & J", January 1984. `loderunner i` is a BASIC loader: it shows a loading screen ("plug joystick into port #2"), then a small machine-code routine (POKEd into screen memory and hidden by black-on-black colour) loads `it` and `db` and jumps to $6000. So `it` is the main program and `db` is data of some kind. |
 | C | `lode runner` (73 blocks, $0801) | Tried first (2026-11-14, `-autostart "...Lode Runner.d64:lode runner"`). Plays fine, but the status line at the bottom has stray white pixels. |
+
+### The disassembly
+
+[Piddewitt/Loderunner](https://github.com/Piddewitt/Loderunner) on GitHub is a reverse-engineered, commented source of the C64 original that assembles into the exact original program: `asm/it.asm` (the main program, `it`, loaded at `$6000`–`$B7FF`), `inc/LR_ZPG.asm` (zero page) and `inc/LR_Var.asm` (variables and tables). The RAM map below comes from it. Some addresses in its comments don't match its own definitions (for example the hole tables), so the map uses addresses worked out from the definitions. Its files are the game's code, so they stay outside this repository.
+
+Compared on 2026-11-15 (M2 F2), with version A in level 1: version B's `it` differs from the disassembly's `it.prg` in 4 bytes, and version A's `$6000`–`$B7FF` in 22 bytes. Apart from the trainer's changes, all of them are code that changes itself while it runs: the colour in `ColorLevel` (`$65B0`), the volume (`$622F`), the checksum's data pointer (`$87A0`), the track in the disk command string `U1: 5 0 01 2` (`$8EBE`), pointers at `$7A95`–`$7AA1`, `$8B1D`–`$8B40`, `$8C19` and `$8E93`–`$8E9A`.
+
+### Trainer
+
+Version A's trainer changes three things in the game's code (M2 F2, 2026-11-15), and nothing else:
+
+- `$6008`: the call to the copy protection is `NOP`ed out (`JSR $8E11` → `EA EA EA`), always.
+- `$61A2`: with Y to unlimited lives, `DEC $1312` (take a life) becomes `BIT $1312`, which does nothing. So the life counter never goes down.
+- `$611F`: in the main loop, `LDA $1314` becomes `JSR $0334`, a routine of the trainer's in the cassette buffer. It does the replaced `LDA $1314`, but if C= is held (`$DC01` bit 5), it leaves the main loop and jumps to the game's own "level complete" (`$6162`). So a C= skip also gives a life and 1,500 points, like finishing the level.
+
+Checked with Y to unlimited lives and N to invincibility (D6). Not checked: the other answers, though N to unlimited lives presumably leaves `$61A2` alone.
 
 ## Game notes
 
@@ -39,12 +55,89 @@ Observations about the game itself, gathered while playing and in the libretro c
 ### Technical
 
 - **Interrupt routine** (2026-11-14 and 2026-11-15): during the game the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. It stops for about 1.5 s while a level is set up, and once it didn't run for 1.2 s during a level. While the trainer menu waits, the vector points to the KERNAL's routine, `$EA31`. Not checked: whether it changes between levels.
+- **Main loop** (from the disassembly, M2 F2): the interrupt routine only plays sound and reads the keyboard. Everything else happens in the main loop at `$611C`: one pass moves the player, closes holes and respawns guards, moves the guards, and then waits at `$6152` until the interrupt counter (`$132D`) reaches the game speed (`$131B`). At normal speed that's a pass every 2 interrupts, about 30 a second, against 50 frames a second. A hole timer counting down 31 in 50 frames agrees (F1).
+- **The level waits for the player** (from the disassembly): once a level is built, in a real game (not the demo) the player flickers and the main loop doesn't start until a key or the joystick is pressed.
 - **Jiffy clock** (`$A0`–`$A2`): the KERNAL's clock keeps counting during the game, about 60 times per emulated second, except while the interrupt routine stops. Over longer stretches it's a reliable measure of emulated time.
 
 ## RAM map
 
-Filled in during M2. Addresses are for version A.
+Addresses are for version A, from the disassembly (see above) unless the notes say otherwise. **Confirmed** means seen in the running game, with the step that saw it; everything else is still the disassembly's word. Columns are 0–27 from the left, rows 0–15 from the top. "Pass" means one pass of the game's main loop (see Technical), about 30 a second.
+
+### Level grid
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| | | | |
+| `$0800`–`$09C3` | 16 × 28 | The level as played: one byte per tile, row by row. Row r starts at `$0800 + 28 × r` for rows 0–8, and 4 bytes later for rows 9–15 (row 9 at `$0900`), so no row crosses a page. Holes, the player (9) and the guards (8) are marked in it. | Confirmed (F1): guard and player codes moving; a taken gold went `07` → `00` at row 14, column 7 (`$0993`). |
+| `$0A00`–`$0BC3` | 16 × 28 | The level as built, laid out the same way, without the player, guards or holes. Respawning guards look for an empty tile in this one. | Confirmed (F1): the same gold went `07` → `00` here too (`$0B93`). |
+
+Tile codes: 0 empty, 1 brick (diggable), 2 solid block, 3 ladder, 4 rope, 5 trap brick (looks like brick, falls through), 6 hidden exit ladder (blanked when the level starts and listed in the exit ladder table), 7 gold, 8 guard, 9 player.
+
+### Player
+
+| Address | Size | Meaning | Notes |
+| --- | --- | --- | --- |
+| `$03` | 1 | Column | |
+| `$04` | 1 | Row. The level is complete when this is 0, `$06` is 2 and no gold is left. | |
+| `$05` | 1 | Position within the tile, left to right: 0–4, 2 = centred | |
+| `$06` | 1 | Position within the tile, top to bottom: 0–4, 2 = centred | |
+| `$07` | 1 | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` dig left, `$07` fall left, `$08`–`$0F` the same facing right, `$10`–`$11` ladder | |
+| `$1314` | 1 | Alive: 1 alive, 0 dead (caught, trapped in a hole, or the demo ended) | |
+| `$1315` | 1 | Falling: `$00` falling, `$20` not, `$FF` at the start | |
+| `$1316` | 1 | Digging: `$00` no, `$01` right, `$FF` left | |
+
+### Guards
+
+Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop moves one guard at a time through a working copy in the zero page, so while a guard is being moved, its table entries are out of date.
+
+| Address | Size | Meaning | Notes |
+| --- | --- | --- | --- |
+| `$131C` | 1 | Number of guards (0–5) | Confirmed (F1): 3 in the demo. |
+| `$1260`+n | 1 each | Column of guard n | Confirmed (F1): changing in the demo. |
+| `$1268`+n | 1 each | Row | Confirmed (F1). |
+| `$1270`+n | 1 each | Gold or hole timer. Negative: he carries gold, counts up, and drops it at 0. Positive: he's stuck in a hole, counts down; he shakes below `$0D` and climbs out below `$07`. | Changing in the demo (F1). |
+| `$1278`+n | 1 each | Position within the tile, left to right (0–4, 2 = centred) | Changing (F1). |
+| `$1280`+n | 1 each | Position within the tile, top to bottom (0–4) | Changing (F1). |
+| `$1288`+n | 1 each | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` fall left, `$07`–`$0D` the same facing right, `$0E`–`$0F` ladder | |
+| `$1290`+n | 1 each | Facing: `$FF` left, `$01` right | Confirmed (F1): `FF` → `01` as a guard turned. |
+| `$1298`+n | 1 each | Respawn timer: starts at `$14` (20 passes) when a guard dies; he reappears in two steps (at `$13` and `$0A`) and moves again at 0 | |
+| `$131E` | 1 | Respawn column: steps by one each pass, 0–27. A dead guard comes back on row 1 at the first empty tile (in the level as built) from this column on, trying the next rows if a row has none. So respawning isn't random. | Confirmed (F1): one step per pass. Respawn place not seen yet. |
+| `$131F` | 1 | The guard being moved (1–5) | |
+| `$15`–`$1B` | 7 | Working copy of the guard being moved: column, row, sprite, facing, gold or hole timer, position within the tile (left to right, top to bottom) | |
+| `$1320` | 1 | How long guards stay in a hole; set when a level starts, from a table indexed by `$1311` (0 in a new game) | |
+
+### Holes and exit ladders
+
+| Address | Size | Meaning | Notes |
+| --- | --- | --- | --- |
+| `$12A0`+i | 31 | Column of hole i (0–30) | |
+| `$12C0`+i | 31 | Row of hole i | |
+| `$12E0`+i | 31 | Open time of hole i, 0 = no hole. Starts at `$B4` (180 passes, about 6 s) and counts down once per pass; the hole fills in stages at `$14` and `$0A`. | Changing (F1): `8F` → `70` in 50 frames, 31 passes. |
+| `$1301` | 1 | Number of hidden exit ladders | |
+| `$1201`+n, `$1231`+n | 1 each | Column and row of hidden exit ladder n (from 1) | |
+
+### Game
+
+| Address | Size | Meaning | Notes |
+| --- | --- | --- | --- |
+| `$1305` | 1 | Level number, 1–150 | |
+| `$1306` | 1 | Game mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list show), 3 play from the level editor, 5 level editor | Confirmed (F1, F2): 1 in the demo, 2 in level 1. |
+| `$130A`–`$130D` | 4 | Score, BCD (two digits per byte), lowest byte first | Confirmed (F1): 250 after a gold. |
+| `$130E` | 1 | Gold left in the level | Confirmed (F1): one less after a gold. |
+| `$1310` | 1 | Level number as stored on disk, 0–149 | |
+| `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2): 5 in level 1. |
+| `$1318` | 1 | Cheated (no high score): `$00` yes, `$01` no | |
+| `$1319` | 1 | Joystick up/down as the game read it: `$00` none, `$21` up, `$25` down; `$1E` and `$26` when digging left and right | |
+| `$131A` | 1 | Joystick left/right: `$00` none, `$22` left, `$2A` right; `$1E` and `$26` when digging | Confirmed (F1): `22` → `2A` as the demo turned right. |
+| `$131B` | 1 | Game speed: the main loop waits until the interrupt counter reaches it, so 5 (normal) means a pass every 2 interrupts. 3–8. | |
+| `$132A` | 1 | Death tune: not 0 while it plays after the player dies | |
+| `$132D` | 1 | Interrupt counter: counted up by every interrupt, set to 3 after each pass. The main loop waits until it reaches the game speed (`$131B`). | Changing (F1). |
+| `$1339` | 1 | Dig side: `$00` behind the player, `$FF` in front (Ctrl+D toggles it) | |
+
+### Code addresses
+
+| Address | What |
+| --- | --- |
+| `$611C` | Main loop: move the player, close holes, move guards |
+| `$6152`–`$6161` | The main loop's wait for the interrupt counter, then back to `$611C` |
+| `$6162` | Level complete |
+| `$648A` | Interrupt routine: sound and keyboard only |

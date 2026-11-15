@@ -8,7 +8,7 @@ This is the overview: status, decisions, architecture, milestones, open question
 
 ## Status
 
-**Current milestone:** M2 (find Lode Runner's data in RAM), not started yet. M1 was finished on 2026-11-15, see [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md).
+**Current milestone:** M2 (find Lode Runner's data in RAM), in progress since 2026-11-15, see [M2-find-ram-data.md](milestones/M2-find-ram-data.md). M1 was finished on 2026-11-15.
 **Last updated:** 2026-11-15
 
 ---
@@ -36,6 +36,7 @@ This is the overview: status, decisions, architecture, milestones, open question
 | D9 | **Repository layout:** the solution lives in `C64Bot/`, documentation in `docs/`, and `CLAUDE.md` in `.claude/`. See Repository layout below. | Owner's preference: the solution root is not the repo root, and documentation doesn't live in the solution. The repo root holds only repo-wide files. |
 | D10 | **One document per milestone** in `docs/milestones/`, created when the milestone starts. This file stays the overview. Game facts go in `docs/lode-runner.md`. | One plan file was getting long, and each milestone adds its own step list. Decisions and the session log stay here only, so they can't drift apart across files. |
 | D11 | **WPF** for the game window and, later, the debug view | Owner's choice (2026-11-15). Built into .NET on Windows. `WriteableBitmap` shows 50 pictures a second easily, and drawing on top of the picture is simple. The project is Windows-only anyway (the frame clock uses a Windows timer). |
+| D12 | **Generic code goes in `C64Bot.Libretro`, Lode Runner code in `C64Bot.LodeRunner`** (the game adapter of D5, created when its first code is written, M2 F4). Tools that work for any game, like the RAM-compare tool, are generic. | Owner's choice (2026-11-15). Keeps the emulator layer reusable for other games, as D5 intends. |
 
 ## Architecture
 
@@ -94,26 +95,13 @@ Run .NET commands from the repo root with the folder name (`dotnet test C64Bot`)
 | --- | --- | --- | --- |
 | M0 | Project setup | Done | [M0-project-setup.md](milestones/M0-project-setup.md) |
 | M1 | Connect C# to the emulator | Done | [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md) |
-| M2 | Find Lode Runner's data in RAM | Not started | |
+| M2 | Find Lode Runner's data in RAM | In progress | [M2-find-ram-data.md](milestones/M2-find-ram-data.md) |
 | M3 | Snapshot and replay (solver idea 1) | Not started | |
 | M4 | Planner for levels without guards (solver idea 2) | Not started | |
 | M5 | Guards | Not started | |
 | M6 | Experiments | Not started | |
 
 Rough scope of the milestones that haven't started yet. Each list moves into its own document when the milestone starts.
-
-### M2: Find Lode Runner's data in RAM
-
-- Build the RAM-compare tool
-- First target: the game's state (title screen, demo, playing, level ready), so start-up no longer depends on fixed frame numbers (M1 T7)
-- Half-updated state: RAM is read when `retro_run` returns, at the end of a frame, which can fall in the middle of the game's update. Find out whether that happens, and how to read a complete state (M1 notes).
-- Level grid (28×16 in the Apple II original) and tile codes
-- Player position, including position within a tile
-- Guard positions and states
-- Gold remaining, lives, level number
-- Hole/dig state and refill timers
-- Find out how the C64 version maps digging (fire button plus direction, or keys)
-- Record findings in the RAM map in [lode-runner.md](lode-runner.md)
 
 ### M3: Snapshot and replay (solver idea 1)
 
@@ -141,10 +129,9 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 
 ## Open questions
 
-- Does the trainer change any game code or RAM that the bot relies on? Check by comparing RAM with the trainer on and off once the RAM map exists.
 - How should the bot get past the trainer menu: type the answers on every start, or start from a snapshot taken after the menu? Typing works (M1 T4), but loading and the menu take 2,532 frames, a few seconds flat out. A snapshot in memory helps within one session; a snapshot file would skip loading on every start, but only works with the core build that made it. Can wait until the bot starts many runs.
 - What happens to `C64Bot.ViceMonitor` (the binary monitor client) once M2 is done: keep it as a tool for exploring in the VICE program, or remove it?
-- Where do guards respawn, and is it random? (This affects whether replays stay deterministic.)
+- The disassembly says fire ends the demo (`DemoHandler`) and starts a game from the title screen, but in M1 T7 fire at frame 1000 left the demo running. Why? Not needed for now: SPACE works.
 
 ## Session log
 

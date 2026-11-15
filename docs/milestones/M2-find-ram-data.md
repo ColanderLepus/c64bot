@@ -1,0 +1,42 @@
+# M2: Find Lode Runner's data in RAM
+
+**Status:** In progress, started 2026-11-15
+
+Find where Lode Runner keeps what the bot needs in the C64's RAM: the game's state, the level, the player, the guards, the holes, and the counters. RAM comes straight from the core after each frame (`LibretroCore.SystemRam`), and save states let us try the same moment again with different inputs. Findings go in the RAM map in [lode-runner.md](../lode-runner.md).
+
+## Tasks
+
+- [x] Build the RAM-compare tool (F1)
+- [ ] First target: the game's state (title screen, demo, playing, level ready), so start-up no longer depends on fixed frame numbers (M1 T7)
+- [ ] Half-updated state: RAM is read when `retro_run` returns, at the end of a frame, which can fall in the middle of the game's update. Find out whether that happens, and how to read a complete state (M1 notes).
+- [ ] Level grid (28×16 in the Apple II original) and tile codes
+- [ ] Player position, including position within a tile
+- [ ] Guard positions and states
+- [ ] Gold remaining, lives, level number
+- [ ] Hole/dig state and refill timers
+- [ ] Find out how the C64 version maps digging (fire button plus direction, or keys)
+- [ ] Record findings in the RAM map in [lode-runner.md](../lode-runner.md)
+
+## Steps
+
+Agreed with the owner on 2026-11-15. Done one step at a time, checking each before starting the next. The addresses are from the disassembly (see Notes) and are only hypotheses until a step confirms them. Generic code goes in `C64Bot.Libretro`, Lode Runner code in `C64Bot.LodeRunner` (D12).
+
+- [x] **F1. RAM-compare tool** (in `C64Bot.Libretro`). It compares two RAM images and lists the changed address ranges with old and new values, optionally limited to chosen ranges. It saves RAM to a file and loads a `.prg` file at its load address. In the app's console, R remembers RAM and D prints what changed since then. Check: unit tests; in the demo, D shows changes where the disassembly says the moving parts are.
+- [x] **F2. Is version A the original?** Compare version A's `$6000`–`$B7FF` during a level with `it` from our own disk (version B) and with the disassembly's `it.prg` (kept outside the repo). Check: every difference is explained (the trainer's patches, the removed copy protection, code that changes itself). Then write the disassembly's map into `lode-runner.md`, marked unconfirmed. If version A differs widely, stop and fall back to searching RAM with F1.
+- **F3. Trace addresses per frame.** Dropped (owner's call, 2026-11-15): it was meant for searching, and the disassembly already says what the bytes mean. F4 prints the bytes it uses instead. Bring it back if a state can't be told apart with the bytes we know.
+- [ ] **F4. Game state.** Find which combination of `$1306` (game mode), `$1314` (player alive), `$132A` (death tune), `$130E` (gold left) and `$132D` (interrupt counter: 3–5 while the main loop runs, counting on while the game waits elsewhere) tells apart: title, demo, level being built, level ready, playing, dying, level complete, game over, high-score list. Check: in a trace of the owner playing a full run, a reader in `C64Bot.LodeRunner` classifies the state; the app prints each change, and it matches the screen.
+- [ ] **F5. Start-up by state.** The app gets from loading to "level ready" by waiting for states instead of frames. Check: it gets there on its own, several runs in a row.
+- [ ] **F6. Half-updated state.** Measure in VICE how many cycles a main-loop pass takes (breakpoints at `$611C` and `$6152`, a level with 5 guards), so the share of frame ends that fall inside a pass. While a guard is moved, its working copy is in the zero page (`$15`–`$1B`) and its table entry is out of date. Then the owner chooses a fix: the CPU's PC from a save state (complete when it's in the wait loop; measure the cost), a patch that counts passes (needs a decision), or reading twice if it's rare. Check: the chosen reader never reports a half-done guard over a few thousand frames.
+- [ ] **F7. Level grid.** 28×16, one byte per tile, at `$0800` (as played, with holes) and `$0A00` (as built); rows 0–8 at `base + 28 × row`, rows 9–15 four bytes later. Tile codes 0–9: empty, brick, solid block, ladder, rope, trap brick, exit ladder, gold, guard, player. Hidden exit ladders at `$1200`/`$1230`, their count at `$1301`. Check: the app prints the grid as text for level 1 and two levels reached with C=, matching the screen; digging changes `$0800` only; the exit ladders appear when all gold is taken.
+- [ ] **F8. Player.** `$03`/`$04` column and row, `$05`/`$06` position within the tile (0–4, 2 = centre), `$07` sprite (facing and action), `$1315` falling, `$1316` digging. Check: walking, climbing, the rope, falling and digging show in the printed values.
+- [ ] **F9. Guards.** Count at `$131C`; guard n (1–5) in tables at `$1260+n` (column), `$1268+n` (row), `$1270+n` (negative: carries gold, counts up to 0 and drops it; positive: stuck in a hole, counts down), `$1278+n`/`$1280+n` (position in the tile), `$1288+n` (sprite), `$1290+n` (facing), `$1298+n` (respawn timer). Check: a guard picks up gold, falls into a hole, dies and respawns, all in the printed values; confirms the respawn rule.
+- [ ] **F10. Holes and counters.** Holes at `$12A0` (column), `$12C0` (row), `$12E0` (timer: 180 passes, about 6 s; refilling in stages at 20 and 10), up to 30; lives `$1312`, level `$1305` (1–150), score `$130A`–`$130D` (BCD, lowest byte first). Check: dig on both sides, lose a life, take gold, skip a level, and the values follow. Write down how digging is controlled.
+- [ ] **F11. Finish.** The RAM map in `lode-runner.md` is complete, with how each entry was confirmed.
+
+## Notes
+
+- **F1, first comparison** (headless, 2026-11-15): in the demo (`$1306` = 1, 3 guards, `$131C` = 3), RAM was compared one second (50 frames) apart. Changes were where the disassembly says: the zero page (55 bytes), the guard tables (`$1261`–`$129B`: column, row, gold/hole timer, position in the tile, sprite, facing `FF` → `01`, respawn timer), a hole timer (`$12E2`: `8F` → `70`, 31 passes in 50 frames, so about 30 passes a second), joystick X (`$131A`: `22` left → `2A` right, the demo's moves), the guard respawn column (`$131E`: `17` → `1A`, one step per pass, wrapping at 28), the interrupt counter (`$132D`), single grid bytes at `$0800` turning to or from 8 (guard) and 9 (player), sprite data at `$0C00`, small parts of both hires screens, one byte of code that changes itself (`$8C19`) and the sound buffer (`$C00C`). Also the stack (`$01E8`–`$01F8`).
+- **F1, in the app** (the owner, 2026-11-15): R at frame 1036 and D at frame 1120 in the demo, while the demo player picked up a piece of gold. Gold left (`$130E`) went `0E` → `0D`; the score (`$130A`–`$130B`) went `00 00` → `50 02`, BCD 250 with the lowest byte first, the points for one gold; and the gold's tile at row 14, column 7 went `07` → `00` in both grids (`$0993` as played, `$0B93` as built), which fits rows 9–15 starting 4 bytes later. Code that changes itself showed up at `$7A95`–`$7AA1`, `$8B1D`–`$8B40` and `$8C19`.
+- **F2** (headless, 2026-11-15): version A in level 1 differs from the disassembly's `it.prg` in 22 of 22,528 bytes, and version B's `it` (extracted with `c1541`) from `it.prg` in 4. All are explained: the trainer's three changes, and code that changes itself. Details in [lode-runner.md](../lode-runner.md) (The disassembly, Trainer), along with the disassembly's RAM map. A throwaway script in the scratchpad did the comparison, with `PrgFile` and `RamImage`; nothing for it was added to the repo.
+
+- **A disassembly of the C64 original exists:** [Piddewitt/Loderunner](https://github.com/Piddewitt/Loderunner) on GitHub, "reverse engineered C64 assembler source code to recreate a bit for bit identical version of the original game", with labelled zero page (`inc/LR_ZPG.asm`), game variables (`inc/LR_Var.asm`) and the main program (`asm/it.asm`, loaded at `$6000`). Found 2026-11-15. Its routine `IRQ` starts with the same bytes that version A has at `$648A` (`EE 2D 13`, `INC $132D`), so version A runs the original's code at the original's addresses (to be checked over the whole program). Some of the addresses in its comments don't match its own definitions (for example the hole tables), so addresses are worked out from the definitions.

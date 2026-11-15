@@ -63,12 +63,16 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     // After the trainer menu the game shows its title screen and then plays itself (the demo), until SPACE
     // is pressed. The window's keyboard goes to the game (see KeyMap). The keys in this console window are
     // for the app itself: T saves a state in memory and L loads it, so the game jumps back to that moment.
+    // R remembers the RAM and D shows what has changed since then (M2 F1).
     Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
     Console.WriteLine("SPACE starts the game from the demo.");
     Console.WriteLine("In this console window: T saves a state, L loads it.");
+    Console.WriteLine("R remembers the RAM, D shows what has changed since then.");
 
     byte[]? savedState = null;
     var savedAt = 0;
+    RamImage? rememberedRam = null;
+    var rememberedAt = 0;
 
     for (var frame = 1; !windowClosed.IsSet; frame++)
     {
@@ -87,6 +91,17 @@ using (var clock = new FrameClock(core.FramesPerSecond))
             {
                 core.LoadState(savedState);
                 Console.WriteLine($"Frame {frame}: loaded the state saved at frame {savedAt}.");
+            }
+            else if (key == ConsoleKey.R)
+            {
+                rememberedRam = new RamImage(core.SystemRam);
+                rememberedAt = frame;
+                Console.WriteLine($"Frame {frame}: remembered the RAM.");
+            }
+            else if (key == ConsoleKey.D && rememberedRam is not null)
+            {
+                Console.WriteLine($"Frame {frame}: changes since frame {rememberedAt}:");
+                PrintRamChanges(rememberedRam.Compare(new RamImage(core.SystemRam)));
             }
         }
 
@@ -154,6 +169,45 @@ void PrintTextScreen()
         if (line.Length > 0)
             Console.WriteLine($"  {row,2}: {line}");
     }
+}
+
+// One line per 256-byte page that changed. A game redraws its screens all the time, which would bury the
+// interesting changes, so the bytes themselves are only shown for pages with a few changes.
+static void PrintRamChanges(IReadOnlyList<RamChange> changes)
+{
+    const int MaxDetailedBytes = 16;
+
+    if (changes.Count == 0)
+    {
+        Console.WriteLine("  none");
+        return;
+    }
+
+    // A run can cross into the next page, so split each run at the page boundaries first.
+    var pieces = changes.SelectMany(change =>
+        Enumerable.Range(change.Start >> 8, ((change.End - 1) >> 8) - (change.Start >> 8) + 1).Select(page =>
+        {
+            var start = Math.Max(change.Start, page << 8);
+            var end = Math.Min(change.End, (page + 1) << 8);
+            var offset = start - change.Start;
+            return new RamChange(start, change.Before[offset..(end - change.Start)], change.After[offset..(end - change.Start)]);
+        }));
+
+    foreach (var page in pieces.GroupBy(piece => piece.Start >> 8))
+    {
+        var count = page.Sum(piece => piece.Before.Length);
+        Console.WriteLine($"  page ${page.Key:X2}: {count:N0} bytes");
+        if (count > MaxDetailedBytes)
+            continue;
+
+        foreach (var piece in page)
+        {
+            var addresses = piece.Before.Length == 1 ? $"${piece.Start:X4}" : $"${piece.Start:X4}-${piece.End - 1:X4}";
+            Console.WriteLine($"    {addresses}: {Hex(piece.Before)} -> {Hex(piece.After)}");
+        }
+    }
+
+    static string Hex(byte[] bytes) => string.Join(' ', bytes.Select(b => b.ToString("X2")));
 }
 
 // Screen codes 1-26 are A-Z and 32-63 match ASCII; bit 7 only means the character is shown reversed.
