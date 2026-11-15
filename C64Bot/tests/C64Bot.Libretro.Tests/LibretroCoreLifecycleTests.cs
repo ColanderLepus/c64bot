@@ -73,6 +73,19 @@ public class LibretroCoreLifecycleTests(LodeRunnerAtTheTrainerMenu lodeRunner)
     }
 
     [CoreFact]
+    public void WriteSystemRam_BeforeLoadGame_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        using var core = LibretroCore.Load(CoreFiles.CorePath);
+
+        // Act
+        var exception = Record.Exception(() => core.WriteSystemRam(0xC000, [1]));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
+    }
+
+    [CoreFact]
     public void SaveState_BeforeLoadGame_ThrowsInvalidOperationException()
     {
         // Arrange

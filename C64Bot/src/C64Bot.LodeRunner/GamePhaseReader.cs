@@ -27,13 +27,19 @@ public sealed class GamePhaseReader
     private GamePhase _phase = GamePhase.Other;
 
     /// <summary>
+    /// Whether the game's main loop was running at the last <see cref="Update"/>: the player and the guards move,
+    /// in a real game or in the demo.
+    /// </summary>
+    public bool MainLoopRunning { get; private set; }
+
+    /// <summary>
     /// Reads the phase from the RAM as it is after a frame.
     /// </summary>
     /// <param name="ram">The C64's 64 KB of RAM, for example <c>LibretroCore.SystemRam</c>.</param>
     public GamePhase Update(ReadOnlySpan<byte> ram)
     {
-        var mainLoopRunning = UpdateMainLoopRunning(ram[RamMap.InterruptCounter]);
-        _phase = Read(ram, mainLoopRunning);
+        MainLoopRunning = UpdateMainLoopRunning(ram[RamMap.InterruptCounter]);
+        _phase = Read(ram, MainLoopRunning);
         return _phase;
     }
 

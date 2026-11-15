@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -13,6 +14,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Where the core and the disk are, and skipping the tests that need them on a PC without them. -->
+    <Compile Include="..\C64Bot.Libretro.Tests\CoreFiles.cs" Link="CoreFiles.cs" />
+    <Compile Include="..\C64Bot.Libretro.Tests\CoreFactAttribute.cs" Link="CoreFactAttribute.cs" />
   </ItemGroup>
 
   <ItemGroup>

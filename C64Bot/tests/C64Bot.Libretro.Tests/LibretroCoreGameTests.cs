@@ -65,6 +65,35 @@ public class LibretroCoreGameTests(LodeRunnerAtTheTrainerMenu lodeRunner)
         Assert.Contains("TOTAL INVINCIBILITY (Y/N) ?", lodeRunner.ScreenText());
     }
 
+    [CoreFact]
+    public void WriteSystemRam_ThreeBytes_CanBeReadBackFromSystemRam()
+    {
+        // Arrange
+        var core = lodeRunner.Core;
+        var before = core.SystemRam[0xC100..0xC103].ToArray(); // free RAM while the trainer menu waits
+
+        // Act
+        core.WriteSystemRam(0xC100, [0x11, 0x22, 0x33]);
+        var written = core.SystemRam[0xC100..0xC103].ToArray();
+        core.WriteSystemRam(0xC100, before);
+
+        // Assert
+        Assert.Equal([0x11, 0x22, 0x33], written);
+    }
+
+    [CoreFact]
+    public void WriteSystemRam_PastTheEndOfRam_ThrowsArgumentOutOfRangeException()
+    {
+        // Arrange
+        var core = lodeRunner.Core;
+
+        // Act
+        var exception = Record.Exception(() => core.WriteSystemRam(0xFFFF, [1, 2]));
+
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(exception);
+    }
+
     private void RunFrames(int frames)
     {
         for (var i = 0; i < frames; i++)

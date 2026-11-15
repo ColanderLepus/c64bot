@@ -35,6 +35,20 @@ public class GamePhaseReaderTests
     }
 
     [Fact]
+    public void Update_CounterDroppingBackInTheDemo_SetsMainLoopRunning()
+    {
+        // Arrange
+        var reader = new GamePhaseReader();
+        reader.Update(Ram(gameMode: 1, counter: 4));
+
+        // Act
+        reader.Update(Ram(gameMode: 1, counter: 3));
+
+        // Assert
+        Assert.True(reader.MainLoopRunning);
+    }
+
+    [Fact]
     public void Update_FourFramesAfterTheLastPass_StillGivesPlaying()
     {
         // Arrange

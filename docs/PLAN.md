@@ -37,6 +37,7 @@ This is the overview: status, decisions, architecture, milestones, open question
 | D10 | **One document per milestone** in `docs/milestones/`, created when the milestone starts. This file stays the overview. Game facts go in `docs/lode-runner.md`. | One plan file was getting long, and each milestone adds its own step list. Decisions and the session log stay here only, so they can't drift apart across files. |
 | D11 | **WPF** for the game window and, later, the debug view | Owner's choice (2026-11-15). Built into .NET on Windows. `WriteableBitmap` shows 50 pictures a second easily, and drawing on top of the picture is simple. The project is Windows-only anyway (the frame clock uses a Windows timer). |
 | D12 | **Generic code goes in `C64Bot.Libretro`, Lode Runner code in `C64Bot.LodeRunner`** (the game adapter of D5, created when its first code is written, M2 F4). Tools that work for any game, like the RAM-compare tool, are generic. | Owner's choice (2026-11-15). Keeps the emulator layer reusable for other games, as D5 intends. |
+| D13 | **The bot writes the game's RAM only to choose the level a new game starts at**, never during play: `GameStarter` writes the level number (`$1310`, `$1305`) into a new game before it loads its level (M2 F5). Otherwise the bot only reads RAM (D3). | Owner's choice (2026-11-15). Any level in about a second, with the lives and score of a new game, where skipping with C= takes about a second per level and adds a life and 1,500 points each time. Writing during play would change the game the bot is meant to play. |
 
 ## Architecture
 
@@ -131,7 +132,6 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 
 ## Open questions
 
-- How should the bot get past the trainer menu: type the answers on every start, or start from a snapshot taken after the menu? Typing works (M1 T4), but loading and the menu take 2,532 frames, a few seconds flat out. A snapshot in memory helps within one session; a snapshot file would skip loading on every start, but only works with the core build that made it. Can wait until the bot starts many runs.
 - What happens to `C64Bot.ViceMonitor` (the binary monitor client) once M2 is done: keep it as a tool for exploring in the VICE program, or remove it?
 - The disassembly says fire ends the demo (`DemoHandler`) and starts a game from the title screen, but in M1 T7 fire at frame 1000 left the demo running. Why? Not needed for now: SPACE works.
 

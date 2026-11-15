@@ -162,6 +162,29 @@ public sealed unsafe partial class LibretroCore : IDisposable
     }
 
     /// <summary>
+    /// Writes bytes into the emulated machine's RAM (see <see cref="SystemRam"/>), between frames. The game sees
+    /// them from the next frame on.
+    /// </summary>
+    /// <remarks>
+    /// This changes the game behind its back, like a cheat. Where the machine shows ROM or I/O chips instead, the
+    /// bytes go to the RAM underneath, which the game may not see.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The bytes don't fit in RAM from this address on.</exception>
+    /// <exception cref="InvalidOperationException">No game has been loaded.</exception>
+    /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>
+    public void WriteSystemRam(int address, ReadOnlySpan<byte> bytes)
+    {
+        ThrowUnlessGameLoaded();
+        var size = (int)_functions.GetMemorySize(MemorySystemRam);
+        if (address < 0 || address > size - bytes.Length)
+            throw new ArgumentOutOfRangeException(
+                nameof(address), $"{bytes.Length} bytes from ${address:X4} don't fit in {size} bytes of RAM.");
+
+        var ram = new Span<byte>(_functions.GetMemoryData(MemorySystemRam), size);
+        bytes.CopyTo(ram[address..]);
+    }
+
+    /// <summary>
     /// Asks the core for its name, version and the files it can load. Can be called before the core is set up.
     /// </summary>
     /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>

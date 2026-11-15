@@ -27,6 +27,12 @@ public static class RamMap
     public const int Level = 0x1305;
 
     /// <summary>
+    /// The level number as stored on disk, 0–149: one less than <see cref="Level"/>. When a level starts, the
+    /// game loads this one from disk.
+    /// </summary>
+    public const int LevelOnDisk = 0x1310;
+
+    /// <summary>
     /// The game's own mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list
     /// show), 3 play from the level editor, 5 level editor.
     /// </summary>
