@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
-using C64Bot.Vice.Protocol;
+using C64Bot.ViceMonitor.Protocol;
 
-namespace C64Bot.Vice.Tests;
+namespace C64Bot.ViceMonitor.Tests;
 
 public class MonitorClientTests
 {

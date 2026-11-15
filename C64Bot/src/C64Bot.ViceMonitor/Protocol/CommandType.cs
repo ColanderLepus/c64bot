@@ -1,4 +1,4 @@
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// The kinds of command that can be sent to VICE's binary monitor.

@@ -1,4 +1,4 @@
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// Whether a command succeeded, and if not, why.

@@ -19,6 +19,7 @@ Observations about the game itself, gathered while playing.
 - Joystick in **port 2** (according to version B's loading screen).
 - Undiggable blocks look different from diggable bricks. On level 1, the left part of the top brick row is undiggable.
 - **Interrupt routine** (seen 2026-11-14, during a level): the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. Once, it didn't run for 1.2 s. The KERNAL's jiffy clock (`$A0`–`$A2`) keeps counting during the game, so it's a reliable measure of emulated time. Not checked: whether the vector changes between levels or in the menus.
+- **Trainer menu and level start** (seen 2026-11-15 in the libretro core): the trainer menu appears 2,532 frames after loading starts, its text in the screen memory at `$0400` (row 2 `UNLIMITED LIVES (Y/N) ?`, row 4 `TOTAL INVINCIBILITY (Y/N) ?`, row 7 `C= SKIPS LEVEL DURING GAME`, row 10 `(SPACE)`). While the menu waits, the interrupt vector points to the KERNAL's own routine, `$EA31`. Right after SPACE it points to `$648A`. When a level starts, the interrupt routine stops for about 1.5 s, so the jiffy clock stands still while the level is set up.
 
 ## RAM map
 

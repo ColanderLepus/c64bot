@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// A command for VICE's binary monitor, such as "read this memory" or "resume the emulator".

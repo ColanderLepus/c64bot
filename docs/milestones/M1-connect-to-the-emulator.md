@@ -1,21 +1,85 @@
-# M1: Connect C# to VICE
+# M1: Connect C# to the emulator
 
-**Status:** In progress (S1–S6 done)
+**Status:** In progress (part 1 done and replaced; part 2: T1–T6 done)
 
-Build the binary monitor client in `C64Bot.Vice`, so the program can talk to a running VICE: read and write memory, send input and control the emulator. The bot plays at real-time speed (D4), so M1 also has to find a way to read and control the game about 50 times a second without changing its speed.
+Make a C64 emulator controllable from C#: read memory, send input, control the timing and show the picture. The bot plays at real-time speed (D4), so this has to work about 50 times a second without changing the game's speed.
+
+M1 has two parts:
+
+- **Part 1** (S1–S6, 2026-11-14) built a client for the VICE program's binary monitor. It works, but S6 showed that talking to a running VICE upsets its timing, so real-time play needed workarounds.
+- **Part 2** (T1–T6, 2026-11-15, first as a trial on the branch `try-libretro-core`) runs the emulator inside our program as a libretro core instead, using VICE's C64 emulator as the core. D2, D4 and D8 were changed to this.
 
 ## Tasks
 
-- [x] Connect and ping
-- [x] Read and write memory
-- [x] Real-time loop, paced by the bot, that keeps the game at 100% speed
-- [ ] Joystick input from inside the loop
-- [ ] Keyboard input
+- [x] Load the VICE core and run Lode Runner (T2, T3)
+- [x] Read RAM (T3)
+- [x] Keyboard input (T4)
+- [x] Real-time loop at the real C64's speed (T5)
+- [x] Show the picture (T6)
+- [ ] Joystick input
 - [ ] Save and load snapshots
-- [ ] Debug mode: one step per key press
-- [ ] Grab the screen
+- [ ] Debug mode: one frame per key press
+- [ ] Keyboard and joystick from the window, so a human can play
+- [ ] Sound (optional)
 
-## Protocol summary
+## Part 2: the VICE libretro core
+
+A **libretro core** is an emulator built as a DLL with a plain C interface (`libretro.h`). A host program, the **frontend**, loads it and calls `retro_run` once per frame. Our frontend is `LibretroCore` in `C64Bot.Libretro`; names follow `libretro.h`.
+
+How the frontend sets up the core:
+
+1. Give the core its callbacks: environment (the core's questions to the frontend), video refresh, audio, input poll and input state.
+2. Set any core options that differ from their defaults (the core announces them in `retro_set_environment`).
+3. `retro_init`, then `retro_load_game` with the disk's path, then `retro_get_system_av_info`.
+4. `retro_run` once per frame. `retro_get_memory_data` gives a pointer to the C64's 64 KB RAM.
+
+Environment commands the frontend answers (numbers as in `libretro.h`):
+
+| Command | Answer |
+| --- | --- |
+| 9 `GET_SYSTEM_DIRECTORY`, 31 `GET_SAVE_DIRECTORY` | `system\` and `saves\` next to the DLL |
+| 10 `SET_PIXEL_FORMAT` | Yes for XRGB8888 only |
+| 12 `SET_KEYBOARD_CALLBACK` | Keeps the core's function for key presses |
+| 15 `GET_VARIABLE`, 16 `SET_VARIABLES` | Core options: stores the defaults the core announces, answers with the current values |
+| 27 `GET_LOG_INTERFACE` | Our log function |
+
+Everything else gets "no", and the core copes. Without 27, 15/16 and the call to `retro_get_system_av_info`, it crashes (see Notes).
+
+### Steps (part 2)
+
+Done one step at a time, checking each before starting the next. T1–T6 were the trial; each step needs the core DLL (see Environment in `PLAN.md`), but not the VICE program.
+
+- [x] **T1. Get the core.** The prebuilt Windows DLL from the libretro build server, in `C:\Tools\C64\libretro`.
+- [x] **T2. Talk to it.** Load the DLL and call `retro_api_version` and `retro_get_system_info`. Check: the app printed API version 1, "VICE x64sc 3.10 76cde0b", that the core wants a file path, and that `d64` is among the files it loads.
+- [x] **T3. Run Lode Runner without a window.** Set up the core, load the disk, run 3,000 frames and read RAM. Check: the trainer menu's text was in the screen memory at `$0400`. The 60 emulated seconds took 4.6 s.
+- [x] **T4. Keyboard.** Press and release keys through the core's keyboard callback. Check: Y, Y and SPACE went through the trainer menu, and the game's own interrupt routine at `$648A` took over, as in the VICE program.
+- [x] **T5. A steady clock.** A frame clock (`FrameClock`) that sleeps on a high-resolution Windows timer and spins only for the last millisecond. Check: the jiffy clock showed 100.0% speed over 10 seconds.
+- [x] **T6. The picture in a window.** A WPF window (D11) on its own thread shows the newest picture from the core; the emulation runs on the frame clock until the window closes. Check: Lode Runner ran in our window at normal speed and looked smooth.
+- [ ] **T7. Joystick.** Answer the core's input state questions for the RetroPad (libretro's standard gamepad), whose D-pad and B button the core turns into the C64 joystick and fire button. Find out which core option chooses the C64 port, and set port 2. Check: the app holds right for one second, then lets go, and the player walks right and stops.
+- [ ] **T8. Snapshots.** `retro_serialize_size`, `retro_serialize` and `retro_unserialize`, in memory. Check: take a snapshot once the level has started, move the player, load the snapshot, and the player is back where it was. Then decide the open question about the trainer menu: every run could start from a snapshot taken after it.
+- [ ] **T9. Debug mode.** The T6 loop with a different rule: one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
+- [ ] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. Check: you can play level 1 in our window. M3 needs this to record a human playing.
+- [ ] **T11. Sound (optional).** Play the core's sound samples on the PC. Needs an audio library; choose it in this step.
+
+### Notes (part 2)
+
+- **The core in a frontend of our own** (seen in T3, 2026-11-15):
+  - Without a log interface (command 27), the core falls back to its own logger, which writes to stderr and crashes in our process with an access violation.
+  - Every frontend calls `retro_get_system_av_info` after loading a game, and the core sets up its frame rate there. Without it, the first `retro_run` divides by zero.
+  - Without answers to the core options (commands 16 and 15), the sample rate is 0, and `retro_run` divides by zero again.
+  - Our log function only passes on the format string, without its values (`%s`, `%d` stay as they are). Enough to see what the core is doing; printing the values would need a C helper.
+- **Facts about the core** (2026-11-15):
+  - 50.125 frames a second (PAL), sound at 48,000 Hz, pictures of 384×272.
+  - The picture comes in 16-bit colour by default. The core option `vice_gfx_colors` = `24bit` switches to XRGB8888, which in memory is what WPF calls `Bgr32` (blue, green, red, unused).
+  - Key presses go to the C64's keyboard matrix at the next frame, like real keys, not into the keyboard buffer. The core ignores the character and the modifiers in the event.
+  - From loading the disk to the trainer menu takes 2,532 frames (the disk drive is emulated accurately). Flat out, that's a few seconds.
+- **Measurements from T5** (2026-11-15, during a level, 10 seconds): 100.0% speed by the jiffy clock; frames 19.927–19.974 ms apart (19.950 ms on average); emulating a frame took 1.48 ms on average, 2.10 ms at worst; the program used 11% of one CPU core. The first attempt showed 84.7%, because measuring started right at the level start, when the game stops its interrupt routine for about 1.5 s and the jiffy clock stands still.
+
+## Part 1: the VICE program's binary monitor
+
+S1–S6 were done; S7–S11 were dropped when D2 changed, and their jobs moved to part 2: S7 joystick → T7, S8 keyboard → T4, S9 snapshots → T8, S10 debug mode → T9, S11 screen grab → T6. The client stays in `C64Bot.ViceMonitor`, with its tests (see Open questions in `PLAN.md`).
+
+### Protocol summary
 
 From chapter 13 of the VICE 3.10 manual (`C:\Tools\C64\VICE-3.10\doc\vice.pdf`). All multi-byte values are little-endian.
 
@@ -48,7 +112,7 @@ Things that shape the client design:
 - So responses and events arrive mixed together on the same connection. The client needs one reader that matches responses to requests by request ID and hands events to whoever listens for them.
 - Stopping and resuming a running VICE upsets its own speed regulation, so short visits make the game run too fast (S6, see Notes). The real-time loop therefore lets VICE stop by itself at a checkpoint, and resumes it on our own clock.
 
-Commands we'll use in M1:
+Commands part 1 used, or had planned for its dropped steps:
 
 | Type | Command | Used in |
 | --- | --- | --- |
@@ -63,33 +127,20 @@ Commands we'll use in M1:
 
 Events: `0x11` checkpoint info (a checkpoint was hit), `0x31` register info, `0x61` JAM, `0x62` stopped, `0x63` resumed.
 
-## Steps
+### Steps (part 1)
 
 Done one step at a time, checking each before starting the next. S1–S2 need no VICE: they are plain code with unit tests. From S3 on, each step is checked against a running VICE (start command in `.claude/CLAUDE.md`).
 
-The order puts the risky parts early. S6 and S7 test the two things real-time play depends on: reading the game about 50 times a second without changing its speed, and setting the joystick from outside. If either fails, we revisit D4 or D2 before building the rest. (S6 did change D4; see Notes.)
-
-### Foundation
+The order put the risky parts early. S6 and S7 were to test the two things real-time play depends on: reading the game about 50 times a second without changing its speed, and setting the joystick from outside. S6 led to part 2.
 
 - [x] **S1. Encode commands.** A type that turns a command (type, request ID, body) into bytes. Check: a unit test encodes the checkpoint example from section 13.3 of the manual and gets exactly `02 02 08 00 00 00 ad de 34 12 12 e2 fc e3 fc 01 01 04 01`.
 - [x] **S2. Decode responses.** A type that reads one response (header and body) from a stream, using the body length to know where it ends. Check: unit tests decode the manual's stopped event `02 02 02 00 00 00 62 00 ff ff ff ff cf e5` (type `0x62`, no error, event, PC = `$E5CF`), and two responses sent back to back come out as two separate responses.
 - [x] **S3. Connect and ping.** A client class that opens a TCP connection to `127.0.0.1:6502`, runs a background reader, and matches responses to requests by request ID. The app connects and sends a ping. Check: the app prints that the ping was answered, and VICE's window freezes, because any command stops the emulator.
 - [x] **S4. Events and resume.** The client passes events (request ID `0xFFFFFFFF`) to the app, and gets an Exit command. Check: the app prints the register info and stopped events that follow the ping (with the PC), sends Exit, and VICE runs again.
 - [x] **S5. Read and write memory.** Memory get and set. Check: at the `READY.` prompt, the app reads screen memory at `$0400` and prints the codes of the first characters on screen, then writes a byte there and the character appears in the top-left corner.
-
-### Real time: the risky parts
-
 - [x] **S6. Real-time loop.** Read the game about 50 times a second without changing its speed. First tried: visit a running VICE 50 times a second (read a block of memory, then Exit). That made the game run too fast, so the loop now sets a checkpoint on the game's interrupt routine, lets VICE stop there by itself, reads, and sends Exit once real time has caught up with emulated time. Check: the KERNAL jiffy clock shows 100% speed over 10 seconds, and the game looks smooth. Measurements and the cause are in the Notes below.
-- [ ] **S7. Joystick.** Joyport set, used from inside the real-time loop. First find out how ports are numbered and which bits mean up, down, left, right and fire (manual, vice-bridge-net, or testing). Then find out whether a value stays set after Exit until it's changed, or whether VICE's own joystick handling overwrites it. Check: in Lode Runner the app holds right for one second, then releases, and the player walks right and stops. If the value doesn't hold, stop and revisit D2.
 
-### The rest of the toolkit
-
-- [ ] **S8. Keyboard.** Keyboard feed. Check: on version A's trainer menu, the app types `N`, `N` and a space, and the game starts with the trainer off. Note: this writes to the keyboard buffer, so it works for menus that read keys through the KERNAL but probably not for keys the game scans itself (like C= for level skip). Record what works in [lode-runner.md](../lode-runner.md).
-- [ ] **S9. Snapshots.** Dump and undump. Check: save a snapshot in Lode Runner, move the player, load the snapshot, and the player is back where it was. Snapshots also give every test run the same starting point, without going through loading and the trainer menu.
-- [ ] **S10. Debug mode.** The S6 loop with a different rule for sending Exit: on each key press instead of on time. Check: each key press advances the game by one step (one run of its interrupt routine), and holding the key down runs it in slow motion.
-- [ ] **S11. Grab the screen.** Display get and palette get, saved as an image file. Choose the image format and library in this step. Check: the saved image matches what VICE shows. This feeds the debug view later, and the screen-reading fallback (D3).
-
-## Notes
+### Notes (part 1)
 
 - Start VICE with `-binarymonitor`; see the Commands section in `.claude/CLAUDE.md`.
 - The manual lists [vice-bridge-net](https://github.com/MihaMarkic/vice-bridge-net), an existing .NET library for this protocol. We write our own (D8), but it's a good reference if something is unclear.
@@ -126,7 +177,7 @@ The order puts the risky parts early. S6 and S7 test the two things real-time pl
   - Every Windows sound device shifts the timing on a stop and resume in its own way: `dx` resets its write position, `wmm` puts its write position right behind the playback position, `sdl` forgets that its buffer was full. With `dummy`, VICE sleeps using a standard Windows waitable timer, so it emulates in bursts.
   - VICE's network play exchanges joystick input every frame without entering the monitor, but with at least 5 frames of delay (`network.c`), and it can't read memory.
   - Alternatives outside the VICE app: [vice-libretro](https://github.com/libretro/vice-libretro) is a port of VICE 3.10 (including x64sc) as a libretro core, a DLL that a host program runs one frame per call. It hands the host a pointer to the 64 KB RAM (`retro_get_memory_data`) and saves and loads snapshots in memory. Prebuilt Windows DLLs are on the libretro build server. RetroArch, the usual host, can also read and write core memory over UDP between frames (`READ_CORE_MEMORY`, up to 16 KB per request) and take gamepad input over the network, without pausing the core.
-- **Follow-ups from S6:**
+- **Follow-ups from S6** (no longer needed after part 2, except that the high-resolution timer became `FrameClock` in T5):
   - The wait spins on the stopwatch and keeps a CPU core busy. Use a high-resolution timer instead, and spin only for the last moment.
   - Sound wasn't checked. Every stop suspends and resumes VICE's sound output, 60 times a second, so it may sound choppy.
   - If the game ever looks jerky, look for a point that runs once per frame instead of the 60 Hz interrupt routine.

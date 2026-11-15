@@ -2,9 +2,9 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Threading.Channels;
-using C64Bot.Vice.Protocol;
+using C64Bot.ViceMonitor.Protocol;
 
-namespace C64Bot.Vice;
+namespace C64Bot.ViceMonitor;
 
 /// <summary>
 /// A connection to VICE's binary monitor that sends commands and waits for their answers.

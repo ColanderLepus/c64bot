@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-A C# program that plays Commodore 64 games running in the VICE emulator, starting with Lode Runner.
+A C# program that plays Commodore 64 games, starting with Lode Runner. The emulator runs inside the program as a libretro core; the core we use is VICE 3.10's x64sc (D2 in `docs/PLAN.md`).
 
 ## Plan documents
 
@@ -29,29 +29,27 @@ Run from the repo root:
 ```powershell
 dotnet build C64Bot                          # build all projects
 dotnet test C64Bot                           # run all tests
-dotnet run --project C64Bot/src/C64Bot.App   # run the app
+dotnet run --project C64Bot/src/C64Bot.App   # run the app: loads the core and opens its window
 
-# Start VICE with the binary monitor on (TCP port 6502), at the BASIC READY. prompt
-C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor
-
-# Start VICE with the binary monitor on and autostart Lode Runner version A
-C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"
+# The VICE program, for exploring (its monitor and debugger). With the binary monitor on (TCP port 6502):
+C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor                                                         # at the BASIC READY. prompt
+C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"      # with Lode Runner version A
 ```
 
-VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
+The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`), but not the VICE program. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
 
 ## Conventions
 
 - The owner's terminal is PowerShell 7 (`pwsh.exe`) in VS Code. Write any command meant for the owner to run in PowerShell syntax, not bash or cmd.
 - The .NET solution lives in `C64Bot/`, not in the repo root. Documentation lives in `docs/`. Keep the repo root for repo-wide files only.
 - Markdown files follow markdownlint style: a blank line after headings and around lists.
-- Names in code follow the VICE manual's terminology (for example command, response, body, request ID, memspace, checkpoint). This always wins over other naming arguments, so don't debate it: just use VICE's term.
+- Names in code follow the terminology of what they wrap: the VICE manual's in `C64Bot.ViceMonitor` (for example command, response, body, request ID, memspace, checkpoint), and `libretro.h`'s in `C64Bot.Libretro` (for example core, frontend, environment command, system info, core option). This always wins over other naming arguments, so don't debate it: just use their term.
 - XML documentation (`<summary>` and friends):
   - Every public type gets a `<summary>`: one sentence saying what it is.
   - Public members get one only when the name isn't enough (what it really does, an edge case, why it exists). No summaries that just repeat the name, like "Gets the request ID."
   - Enum values get one only when the value needs explaining.
   - No XML docs on private code or tests. Private code gets a `//` comment if something needs explaining; tests are explained by their names and Arrange/Act/Assert sections.
-  - Write for a reader who knows C# but not VICE or the C64. Explain terms like binary monitor, event, request ID, snapshot or checkpoint in plain words where a type depends on them. The manual is for details, not for basic understanding: point to the section in `<remarks>`.
+  - Write for a reader who knows C# but not VICE or the C64. Explain terms like binary monitor, event, request ID, snapshot, checkpoint, libretro core or frontend in plain words where a type depends on them. The manual is for details, not for basic understanding: point to the section in `<remarks>`.
   - Style: a type's summary is a noun phrase ("A command for VICE's binary monitor ..."), a method's starts with a verb ("Reads exactly one response ..."). Details that don't fit in one sentence go in `<remarks>`. Use `<param>` on constructors when a parameter needs explaining, and `<exception>` for exceptions a caller should handle.
   - Not enforced by the compiler (no CS1591 warnings); check it when writing or reviewing code.
 - Tests are split into clear `// Arrange`, `// Act` and `// Assert` sections wherever possible. Act is a separate step, not folded into the assertion.

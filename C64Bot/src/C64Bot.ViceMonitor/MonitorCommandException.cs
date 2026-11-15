@@ -1,6 +1,6 @@
-using C64Bot.Vice.Protocol;
+using C64Bot.ViceMonitor.Protocol;
 
-namespace C64Bot.Vice;
+namespace C64Bot.ViceMonitor;
 
 /// <summary>
 /// The exception thrown when VICE answers a command with an error code instead of OK.

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// A message from VICE's binary monitor: either the answer to a command, or an event VICE sends on its own.

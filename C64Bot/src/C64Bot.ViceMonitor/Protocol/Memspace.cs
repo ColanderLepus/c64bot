@@ -1,4 +1,4 @@
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// Whose memory a command means: the C64's own, or that of one of the emulated disk drives.

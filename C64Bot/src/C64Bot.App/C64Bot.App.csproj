@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\C64Bot.Vice\C64Bot.Vice.csproj" />
     <ProjectReference Include="..\C64Bot.Libretro\C64Bot.Libretro.csproj" />
   </ItemGroup>
 

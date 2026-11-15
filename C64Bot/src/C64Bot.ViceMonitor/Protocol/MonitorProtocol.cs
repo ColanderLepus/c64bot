@@ -1,4 +1,4 @@
-namespace C64Bot.Vice.Protocol;
+namespace C64Bot.ViceMonitor.Protocol;
 
 /// <summary>
 /// Constants shared by commands and responses in VICE's binary monitor protocol.
