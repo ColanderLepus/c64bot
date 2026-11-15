@@ -22,6 +22,12 @@ How to keep them current:
 
 Don't change the plan's direction (milestone order, architecture, decisions) without checking with the owner first.
 
+## How we work
+
+- One step at a time, checking each step before starting the next.
+- Claude implements the changes, but first shows the owner what it plans to change (the code, or a clear description of it) and waits for the go-ahead.
+- After a step: check it (build, tests, a run), update the plan documents, and write a commit message when the owner asks. Commit only when told to.
+
 ## Commands
 
 Run from the repo root:
