@@ -60,8 +60,17 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 - **Interrupt routine** (2026-11-14 and 2026-11-15): during the game the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. It stops for about 1.5 s while a level is set up, and once it didn't run for 1.2 s during a level. While the trainer menu waits, the vector points to the KERNAL's routine, `$EA31`. Not checked: whether it changes between levels.
 - **Main loop** (from the disassembly, M2 F2): the interrupt routine only plays sound and reads the keyboard. Everything else happens in the main loop at `$611C`: one pass moves the player, closes holes and respawns guards, moves the guards, and then waits at `$6152` until the interrupt counter (`$132D`) reaches the game speed (`$131B`). At normal speed that's a pass every 2 interrupts, about 30 a second, against 50 frames a second. A hole timer counting down 31 in 50 frames agrees (F1).
+- **A pass takes more than half its time** (M2 F6, measured with the CPU's PC at the end of each frame): 55–62% of frame ends fall inside a pass, with 3 to 5 guards, most of it drawing (code at `$80xx`–`$8Dxx`). So RAM read after a frame is usually taken halfway through a pass. What's half done then is small: the guard being moved has his new position only in the zero-page copy and maybe the grid, while his table entry still has the last one (11–15% of frames), and about 1 frame in 3,000 has the player's tile missing from the grid.
 - **The level waits for the player** (from the disassembly): once a level is built, in a real game (not the demo) the player flickers and the main loop doesn't start until a key or the joystick is pressed.
 - **Jiffy clock** (`$A0`–`$A2`): the KERNAL's clock keeps counting during the game, about 60 times per emulated second, except while the interrupt routine stops. Over longer stretches it's a reliable measure of emulated time.
+
+## Reading RAM
+
+RAM is read after every frame, and most frames end halfway through a pass of the game's main loop (M2 F6). So each thing is read from where it's always complete (D14):
+
+- **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. Holes and gold: to be settled in F7 and F10.
+- **The guards:** their tables (`$1260`–`$129F`), not the grid's guard tiles or the zero-page copy (`$15`–`$1B`). The game writes a guard's table entry in one go after his move, so every entry is complete; the guard being moved is one move (at most 33 ms) behind.
+- **The player:** `$03`–`$07`. About 1 frame in 3,000 catches his move halfway; then the grid as played has no player tile at his column and row, and the frame is skipped.
 
 ## RAM map
 
