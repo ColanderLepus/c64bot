@@ -1,6 +1,6 @@
 # M1: Connect C# to the emulator
 
-**Status:** In progress (part 1 done and replaced; part 2: T1–T8, R1 and R3 done)
+**Status:** Done, 2026-11-15 (part 1 done and replaced; part 2: T1–T8, T10, R1 and R3 done; T9 moved to M4; T11, sound, left for later)
 
 Make a C64 emulator controllable from C#: read memory, send input, control the timing and show the picture. The bot plays at real-time speed (D4), so this has to work about 50 times a second without changing the game's speed.
 
@@ -19,9 +19,8 @@ M1 has two parts:
 - [x] Joystick input (T7)
 - [x] Tidy up and test the frontend (R1, R3)
 - [x] Save and load snapshots (T8)
-- [ ] Debug mode: one frame per key press
-- [ ] Keyboard and joystick from the window, so a human can play
-- [ ] Sound (optional)
+- [x] Keyboard and joystick from the window, so a human can play (T10)
+- Sound (optional): left for later, see T11
 
 ## Part 2: the VICE libretro core
 
@@ -64,9 +63,9 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
 - [ ] **R2. Split up `Program.cs`.** Not done: the app has no real role yet beyond showing what happens, so it stays as it is for now (owner's call, 2026-11-15).
 - [x] **R3. Tests for the frontend.** `C64Bot.Libretro.Tests`: option default parsing, loading a missing file or a DLL that isn't a core, the order checks, `Dispose` twice, the frame clock's timing, and tests on the real core, which run Lode Runner to the trainer menu once and share it: RAM, options, the picture's size, and a key press answering the menu. The tests that need the core DLL or the disk are skipped on a PC without them. 23 tests, about 4 seconds.
 - [x] **T8. Snapshots.** `LibretroCore.SaveState` and `LoadState` save and load the whole machine in memory, through `retro_serialize_size`, `retro_serialize` and `retro_unserialize`. A save state is libretro's word for what VICE calls a snapshot. In the app's console, T saves a state and L loads it; the fixed key presses from T7 are gone from the app, so the demo just runs. Tests: loading a state brings back all 64 KB of RAM exactly, and an empty or broken state is refused. Check: save a state while the demo plays, let it play on, load the state, and the demo jumps back to that moment. It did (2026-11-15). Two runs from the same state don't repeat exactly, because of VICE's key delay (see Notes).
-- [ ] **T9. Debug mode.** The T6 loop with a different rule: one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
-- [ ] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. Check: you can play level 1 in our window. M3 needs this to record a human playing.
-- [ ] **T11. Sound (optional).** Play the core's sound samples on the PC. Needs an audio library; choose it in this step.
+- **T9. Debug mode.** Moved to M4 (owner's call, 2026-11-15). Stepping through frames is for debugging the bot, together with the debug view; until the bot exists, VICE's monitor is the better tool for looking at the game.
+- [x] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. The window can't use the core itself (it's on another thread), so it puts presses and releases in an `InputQueue`, which the emulation loop applies before each frame. `KeyMap` decides what each PC key does: the arrow keys and Right Ctrl are the joystick (directions and fire) and go nowhere else, and letters, digits, Space, Return, Shift, Left Ctrl, F1–F8 and so on go to the C64's keyboard through the core's own key map. Key repeat is ignored, and everything is released when the window loses the focus. The console keeps T and L for save states; its other keys are gone. Check: the owner played level 1 in our window (2026-11-15). M3 needs this to record a human playing.
+- **T11. Sound (optional).** Play the core's sound samples on the PC. Needs an audio library; choose it in this step. Left for later (owner's call, 2026-11-15): the bot doesn't need sound, so it can be done whenever it's wanted.
 
 ### Notes (part 2)
 

@@ -28,8 +28,9 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 - **Joystick in port 2**, as version B's loading screen says. Confirmed for version A by the owner, and by the player walking right with the joystick in port 2 in the libretro core (2026-11-15).
 - **The joystick as the C64 sees it** (`$DC00`, read in the libretro core, 2026-11-15): nothing `$7F`, right `$77`, left `$7B`, up `$7E`, fire `$6F`. A pressed direction or fire pulls its bit low: bit 0 up, bit 2 left, bit 3 right, bit 4 fire, and bit 1 down (not measured; the standard C64 layout).
-- **SPACE** starts the game from the demo (see Start-up). The trainer menu says the **C= key** skips levels during the game (not tried yet).
-- **Digging:** not known yet (M2).
+- **SPACE** starts the game from the demo (see Start-up).
+- **C= skips to the next level** during the game, as the trainer menu says. In our window that's Left Ctrl, which the libretro core maps to C= (tried by the owner, 2026-11-15).
+- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2.
 
 ### Levels
 

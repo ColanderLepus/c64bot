@@ -42,13 +42,15 @@ Console.WriteLine($"Interrupt routine at ${InterruptRoutine():X4}.");
 
 // T6: watch it. The window runs on a thread of its own: WPF needs a single-threaded apartment (STA)
 // thread, and this way the emulation loop below never waits for the window.
+// T10: the window's keys come back the other way, through a queue.
 var frames = new FrameBuffer();
 core.VideoFrame = frames.Store;
+var input = new InputQueue();
 
 var windowClosed = new ManualResetEventSlim();
 var windowThread = new Thread(() =>
 {
-    var window = new GameWindow(frames);
+    var window = new GameWindow(frames, input);
     window.Closed += (_, _) => windowClosed.Set();
     new Application().Run(window);
 });
@@ -59,29 +61,23 @@ Console.WriteLine("Running in real time. Close the window to stop.");
 using (var clock = new FrameClock(core.FramesPerSecond))
 {
     // After the trainer menu the game shows its title screen and then plays itself (the demo), until SPACE
-    // is pressed. Keys in this console window press things: S taps SPACE, R holds right for one second,
-    // F taps fire. T saves a state in memory and L loads it, so the game jumps back to that moment.
-    Console.WriteLine("In this console window: S taps SPACE, R holds right for one second, F taps fire,");
-    Console.WriteLine("T saves a state, L loads it.");
-
-    // What to let go of, and at which frame.
-    var releases = new List<(int Frame, Action Release, string Name)>();
+    // is pressed. The window's keyboard goes to the game (see KeyMap). The keys in this console window are
+    // for the app itself: T saves a state in memory and L loads it, so the game jumps back to that moment.
+    Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
+    Console.WriteLine("SPACE starts the game from the demo.");
+    Console.WriteLine("In this console window: T saves a state, L loads it.");
 
     byte[]? savedState = null;
     var savedAt = 0;
 
     for (var frame = 1; !windowClosed.IsSet; frame++)
     {
+        input.ApplyTo(core);
+
         while (Console.KeyAvailable)
         {
             var key = Console.ReadKey(intercept: true).Key;
-            if (key == ConsoleKey.S)
-                Hold(() => core.PressKey(RetroKey.Space), () => core.ReleaseKey(RetroKey.Space), 5, frame, "SPACE");
-            else if (key == ConsoleKey.R)
-                Hold(() => core.PressButton(RetroPadButton.Right), () => core.ReleaseButton(RetroPadButton.Right), 50, frame, "right");
-            else if (key == ConsoleKey.F)
-                Hold(() => core.PressButton(RetroPadButton.B), () => core.ReleaseButton(RetroPadButton.B), 5, frame, "fire");
-            else if (key == ConsoleKey.T)
+            if (key == ConsoleKey.T)
             {
                 savedState = core.SaveState();
                 savedAt = frame;
@@ -94,22 +90,8 @@ using (var clock = new FrameClock(core.FramesPerSecond))
             }
         }
 
-        foreach (var release in releases.Where(r => r.Frame == frame).ToList())
-        {
-            release.Release();
-            releases.Remove(release);
-            Console.WriteLine($"Frame {frame}: released {release.Name}.");
-        }
-
         clock.WaitForNextFrame();
         core.RunFrame();
-    }
-
-    void Hold(Action press, Action release, int frames, int frame, string name)
-    {
-        press();
-        releases.Add((frame + frames, release, name));
-        Console.WriteLine($"Frame {frame} ({frame / core.FramesPerSecond:F1} s): holding {name} for {frames} frames.");
     }
 }
 

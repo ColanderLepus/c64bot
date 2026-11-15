@@ -8,7 +8,7 @@ This is the overview: status, decisions, architecture, milestones, open question
 
 ## Status
 
-**Current milestone:** M1 (connect C# to the emulator), see [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md)
+**Current milestone:** M2 (find Lode Runner's data in RAM), not started yet. M1 was finished on 2026-11-15, see [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md).
 **Last updated:** 2026-11-15
 
 ---
@@ -93,7 +93,7 @@ Run .NET commands from the repo root with the folder name (`dotnet test C64Bot`)
 | # | Milestone | Status | Document |
 | --- | --- | --- | --- |
 | M0 | Project setup | Done | [M0-project-setup.md](milestones/M0-project-setup.md) |
-| M1 | Connect C# to the emulator | In progress | [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md) |
+| M1 | Connect C# to the emulator | Done | [M1-connect-to-the-emulator.md](milestones/M1-connect-to-the-emulator.md) |
 | M2 | Find Lode Runner's data in RAM | Not started | |
 | M3 | Snapshot and replay (solver idea 1) | Not started | |
 | M4 | Planner for levels without guards (solver idea 2) | Not started | |
@@ -125,6 +125,7 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 - Model the level as a graph using the movement rules (walk, climb, rope, fall, dig and drop)
 - BFS/A* to each piece of gold, then to the exit ladder
 - Debug view showing the grid and the planned path
+- Debug mode (moved from M1 T9): the real-time loop with a different rule, one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
 - Test on real levels with unlimited lives on, using C= to skip to the level under test (no invincibility, D6)
 
 ### M5: Guards
@@ -150,4 +151,5 @@ Rough scope of the milestones that haven't started yet. Each list moves into its
 - **2026-11-14:** Talked through the approach (binary monitor, RAM reading, three solver ideas plus snapshot search). Created this plan. Found VICE 3.10 and a Lode Runner disk with three versions on it (A, B, C). Version C runs but has stray white pixels on the status line. Version A has a trainer menu (unlimited lives, invincibility, C= skips levels) and a clean status line, so we chose version A (D6). Chose .NET 10 (D7) and our own binary monitor client (D8). Planned the solution skeleton as steps S1–S5 and did S1–S3. Then restructured the repo so the solution lives in `C64Bot/` and the docs in `docs/` (D9). Did S4 and S5, which completes M0. Split the plan into this overview, one document per milestone and a Lode Runner reference (D10). Broke M1 into steps, based on chapter 13 of the VICE manual. Changed D4: the bot plays in real time, and lockstep is only a debugging tool. Reordered M1 to test the risky parts (the cost of a freeze, joystick input) early. Next: M1 S1 (encode commands).
 - **2026-11-14 (later):** M1 S1–S5: a binary monitor client that encodes commands, decodes responses and events, pings, resumes, and reads and writes memory, all checked against a running VICE. S6 (the real-time loop) found that short visits to a running VICE make the game run too fast, up to 168%, measured with the jiffy clock. VICE's source showed why, and that no setting changes it. Pacing VICE ourselves through a checkpoint on the game's interrupt routine gave 100%, and D4 was changed to that. Looked at alternatives, and found the VICE 3.10 libretro core.
 - **2026-11-15:** Tried the libretro core on the branch `try-libretro-core` (M1 T1–T6): our program loads the core, runs Lode Runner from the real disk, reads RAM directly, presses keys through the trainer menu, runs at exactly 100% on a high-resolution frame clock, and shows the picture in a WPF window. It looked smooth. Changed D2, D4 and D8 to this, and added D11 (WPF). Renamed things to match: the repository is now `c64bot`, M1 is "Connect C# to the emulator", and the monitor client is `C64Bot.ViceMonitor`. Merged the branch into `main`. Then M1 T7 (joystick): the frontend plugs a RetroPad into the first port, and the C64 reads the right bits at `$DC00`. The game got in the way: SPACE, not fire, starts it from the demo, and the trainer's invincibility makes the demo get stuck, so D6 now leaves invincibility off. Found that runs aren't exactly repeatable (new open question). Dropped invincibility for good (D6). Reviewed all code and documents: fixed the documents, tidied up `LibretroCore` (R1) and added `C64Bot.Libretro.Tests` (R3); `Program.cs` stays as it is for now. Next: M1 T8 (snapshots).
-- **2026-11-15 (later):** M1 T8: `LibretroCore.SaveState` and `LoadState` save and load the whole machine in memory (about 190 KB), with tests; in the app, T saves a state and L loads it, and the demo jumped back as it should. The fixed key presses from T7 are gone from the app. Looked into why runs aren't repeatable: loading a state is complete, but VICE delays every key press by a random amount, and its random number generator isn't in the state. The bot doesn't need exact replays, so we stopped there; M3 can check joystick-only replays if it wants them. The trainer-menu question can wait. Next: M1 T9 (debug mode).
+- **2026-11-15 (later):** M1 T8: `LibretroCore.SaveState` and `LoadState` save and load the whole machine in memory (about 190 KB), with tests; in the app, T saves a state and L loads it, and the demo jumped back as it should. The fixed key presses from T7 are gone from the app. Looked into why runs aren't repeatable: loading a state is complete, but VICE delays every key press by a random amount, and its random number generator isn't in the state. The bot doesn't need exact replays, so we stopped there; M3 can check joystick-only replays if it wants them. The trainer-menu question can wait. Moved T9 (debug mode) to M4, where there's a bot to step through; until then VICE's monitor is the tool for looking at the game. Next: M1 T10 (play in the window).
+- **2026-11-15 (later still):** M1 T10: the window's keyboard reaches the game. The arrow keys and Right Ctrl are the joystick, the other keys go to the C64's keyboard, through a queue to the emulation thread. The owner played level 1 in our window: digging works, also while running, and Left Ctrl (C=) skips to the next level. Sound (T11) is left for later, so M1 is done. Next: start M2 (find Lode Runner's data in RAM) with its own document.
