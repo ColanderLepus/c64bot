@@ -58,28 +58,20 @@ windowThread.Start();
 Console.WriteLine("Running in real time. Close the window to stop.");
 using (var clock = new FrameClock(core.FramesPerSecond))
 {
-    // T7: after the trainer menu the game shows its title screen and then plays itself (the demo), until
-    // SPACE is pressed. So: tap SPACE once the demo runs (frame 1000), then hold the joystick right from
-    // frame 1100 to 1700. The level takes about 10 seconds to build up, and the player starts walking as
-    // soon as it's ready. Until we can read the game's state (M2), these are fixed frames.
-    // Keys in this console window can press things too: S taps SPACE, R holds right for one second, F taps
-    // fire.
-    const int SpaceAt = 1000;
-    const int RightFrom = 1100;
-    const int RightUntil = 1700;
-    Console.WriteLine($"SPACE at frame {SpaceAt}, right from frame {RightFrom} to {RightUntil}.");
-    Console.WriteLine("In this console window: S taps SPACE, R holds right for one second, F taps fire.");
+    // After the trainer menu the game shows its title screen and then plays itself (the demo), until SPACE
+    // is pressed. Keys in this console window press things: S taps SPACE, R holds right for one second,
+    // F taps fire. T saves a state in memory and L loads it, so the game jumps back to that moment.
+    Console.WriteLine("In this console window: S taps SPACE, R holds right for one second, F taps fire,");
+    Console.WriteLine("T saves a state, L loads it.");
 
     // What to let go of, and at which frame.
     var releases = new List<(int Frame, Action Release, string Name)>();
 
+    byte[]? savedState = null;
+    var savedAt = 0;
+
     for (var frame = 1; !windowClosed.IsSet; frame++)
     {
-        if (frame == SpaceAt)
-            Hold(() => core.PressKey(RetroKey.Space), () => core.ReleaseKey(RetroKey.Space), 5, frame, "SPACE");
-        else if (frame == RightFrom)
-            Hold(() => core.PressButton(RetroPadButton.Right), () => core.ReleaseButton(RetroPadButton.Right), RightUntil - RightFrom, frame, "right");
-
         while (Console.KeyAvailable)
         {
             var key = Console.ReadKey(intercept: true).Key;
@@ -89,6 +81,17 @@ using (var clock = new FrameClock(core.FramesPerSecond))
                 Hold(() => core.PressButton(RetroPadButton.Right), () => core.ReleaseButton(RetroPadButton.Right), 50, frame, "right");
             else if (key == ConsoleKey.F)
                 Hold(() => core.PressButton(RetroPadButton.B), () => core.ReleaseButton(RetroPadButton.B), 5, frame, "fire");
+            else if (key == ConsoleKey.T)
+            {
+                savedState = core.SaveState();
+                savedAt = frame;
+                Console.WriteLine($"Frame {frame}: saved a state ({savedState.Length:N0} bytes).");
+            }
+            else if (key == ConsoleKey.L && savedState is not null)
+            {
+                core.LoadState(savedState);
+                Console.WriteLine($"Frame {frame}: loaded the state saved at frame {savedAt}.");
+            }
         }
 
         foreach (var release in releases.Where(r => r.Frame == frame).ToList())

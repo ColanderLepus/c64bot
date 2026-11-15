@@ -73,6 +73,32 @@ public class LibretroCoreLifecycleTests(LodeRunnerAtTheTrainerMenu lodeRunner)
     }
 
     [CoreFact]
+    public void SaveState_BeforeLoadGame_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        using var core = LibretroCore.Load(CoreFiles.CorePath);
+
+        // Act
+        var exception = Record.Exception(() => core.SaveState());
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
+    }
+
+    [CoreFact]
+    public void LoadState_BeforeLoadGame_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        using var core = LibretroCore.Load(CoreFiles.CorePath);
+
+        // Act
+        var exception = Record.Exception(() => core.LoadState([1, 2, 3]));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
+    }
+
+    [CoreFact]
     public void Initialize_WhileAnotherCoreIsRunning_ThrowsInvalidOperationException()
     {
         // Arrange

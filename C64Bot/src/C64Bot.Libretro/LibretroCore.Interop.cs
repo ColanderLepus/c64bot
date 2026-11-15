@@ -27,6 +27,9 @@ public sealed unsafe partial class LibretroCore
         public readonly delegate* unmanaged[Cdecl]<void> Run;
         public readonly delegate* unmanaged[Cdecl]<uint, void*> GetMemoryData;
         public readonly delegate* unmanaged[Cdecl]<uint, nuint> GetMemorySize;
+        public readonly delegate* unmanaged[Cdecl]<nuint> SerializeSize;
+        public readonly delegate* unmanaged[Cdecl]<void*, nuint, byte> Serialize;
+        public readonly delegate* unmanaged[Cdecl]<void*, nuint, byte> Unserialize;
 
         public CoreFunctions(nint library)
         {
@@ -54,6 +57,9 @@ public sealed unsafe partial class LibretroCore
             Run = (delegate* unmanaged[Cdecl]<void>)Export(library, "retro_run");
             GetMemoryData = (delegate* unmanaged[Cdecl]<uint, void*>)Export(library, "retro_get_memory_data");
             GetMemorySize = (delegate* unmanaged[Cdecl]<uint, nuint>)Export(library, "retro_get_memory_size");
+            SerializeSize = (delegate* unmanaged[Cdecl]<nuint>)Export(library, "retro_serialize_size");
+            Serialize = (delegate* unmanaged[Cdecl]<void*, nuint, byte>)Export(library, "retro_serialize");
+            Unserialize = (delegate* unmanaged[Cdecl]<void*, nuint, byte>)Export(library, "retro_unserialize");
         }
 
         private static nint Export(nint library, string name) => NativeLibrary.GetExport(library, name);

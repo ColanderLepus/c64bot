@@ -304,6 +304,70 @@ public sealed unsafe partial class LibretroCore : IDisposable
     /// </summary>
     public void ReleaseButton(RetroPadButton button) => _pressedButtons &= ~(1 << (int)button);
 
+    /// <summary>
+    /// Saves the emulated machine's whole state (a save state, which VICE calls a snapshot), so that
+    /// <see cref="LoadState"/> can later carry on from this moment.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The state lives in memory only. The VICE core leaves out the disk's contents (only its file name is
+    /// kept), so a state must be loaded with the same disk inserted.
+    /// </para>
+    /// <para>
+    /// The VICE core first lets the emulated CPU finish the instruction it's in, so a state is never taken
+    /// halfway through one. The size can differ from one state to the next.
+    /// </para>
+    /// <para>
+    /// Buttons and keys held down aren't part of the state: they belong to the frontend, and stay as they are.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">No game has been loaded, or the core couldn't save its state.</exception>
+    /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>
+    public byte[] SaveState()
+    {
+        ThrowUnlessGameLoaded();
+
+        // The VICE core measures the size by saving a state, so ask every time.
+        var size = _functions.SerializeSize();
+        if (size == 0)
+            throw new InvalidOperationException("The core can't save its state now.");
+
+        var state = new byte[size];
+        fixed (byte* data = state)
+        {
+            if (_functions.Serialize(data, size) == 0)
+                throw new InvalidOperationException("The core couldn't save its state.");
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Loads a state saved with <see cref="SaveState"/>, so the emulated machine carries on from the moment it
+    /// was saved.
+    /// </summary>
+    /// <remarks>
+    /// Use the same core build and the same disk as when the state was saved. Buttons and keys held down stay
+    /// as they are.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The state is empty.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No game has been loaded, or the core couldn't load the state (for example, it isn't a save state).
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>
+    public void LoadState(ReadOnlySpan<byte> state)
+    {
+        ThrowUnlessGameLoaded();
+        if (state.IsEmpty)
+            throw new ArgumentException("The state is empty.", nameof(state));
+
+        fixed (byte* data = state)
+        {
+            if (_functions.Unserialize(data, (nuint)state.Length) == 0)
+                throw new InvalidOperationException("The core couldn't load the state.");
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

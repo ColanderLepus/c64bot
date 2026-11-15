@@ -1,0 +1,65 @@
+namespace C64Bot.Libretro.Tests;
+
+// Save states on the shared core, which has run Lode Runner to its trainer menu. Each test loads back the state it
+// found before it ends, so the other tests still find the menu as they expect.
+[Collection(CoreCollection.Name)]
+public class LibretroCoreStateTests(LodeRunnerAtTheTrainerMenu lodeRunner)
+{
+    private LibretroCore Core => lodeRunner.Core;
+
+    [CoreFact]
+    public void LoadState_AfterRunningOn_BringsBackTheRam()
+    {
+        // Arrange
+        var state = Core.SaveState();
+        try
+        {
+            var ramBefore = Core.SystemRam.ToArray();
+            for (var i = 0; i < 100; i++)
+                Core.RunFrame();
+            var ramAfterRunning = Core.SystemRam.ToArray();
+
+            // Act
+            Core.LoadState(state);
+            var ramAfterLoading = Core.SystemRam.ToArray();
+
+            // Assert
+            Assert.NotEqual(ramBefore, ramAfterRunning);
+            Assert.Equal(ramBefore, ramAfterLoading);
+        }
+        finally
+        {
+            Core.LoadState(state);
+        }
+    }
+
+    [CoreFact]
+    public void LoadState_EmptyState_ThrowsArgumentException()
+    {
+        // Act
+        var exception = Record.Exception(() => Core.LoadState([]));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
+    }
+
+    [CoreFact]
+    public void LoadState_NotASaveState_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var state = Core.SaveState();
+        var notAState = new byte[1000];
+        try
+        {
+            // Act
+            var exception = Record.Exception(() => Core.LoadState(notAState));
+
+            // Assert
+            Assert.IsType<InvalidOperationException>(exception);
+        }
+        finally
+        {
+            Core.LoadState(state);
+        }
+    }
+}

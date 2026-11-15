@@ -1,6 +1,6 @@
 # M1: Connect C# to the emulator
 
-**Status:** In progress (part 1 done and replaced; part 2: T1–T7, R1 and R3 done)
+**Status:** In progress (part 1 done and replaced; part 2: T1–T8, R1 and R3 done)
 
 Make a C64 emulator controllable from C#: read memory, send input, control the timing and show the picture. The bot plays at real-time speed (D4), so this has to work about 50 times a second without changing the game's speed.
 
@@ -18,7 +18,7 @@ M1 has two parts:
 - [x] Show the picture (T6)
 - [x] Joystick input (T7)
 - [x] Tidy up and test the frontend (R1, R3)
-- [ ] Save and load snapshots
+- [x] Save and load snapshots (T8)
 - [ ] Debug mode: one frame per key press
 - [ ] Keyboard and joystick from the window, so a human can play
 - [ ] Sound (optional)
@@ -63,7 +63,7 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
 - [x] **R1. Tidy up `LibretroCore`** (after a review of all code and documents, 2026-11-15). The core's functions are looked up once at load time instead of on every call; a DLL that isn't a core is rejected at once. The class checks that its steps come in the right order, and `Dispose` can safely be called twice. No exception can escape a callback into the core. Option defaults are parsed safely. The members are in the order they're used, split over three files: the public API, the callbacks, and the C side (functions and structs). Thread safety is documented: one thread only. `C64Bot.Libretro` targets `net10.0-windows`, because `FrameClock` needs Windows; the clock now also reports a failed wait and can be disposed twice.
 - [ ] **R2. Split up `Program.cs`.** Not done: the app has no real role yet beyond showing what happens, so it stays as it is for now (owner's call, 2026-11-15).
 - [x] **R3. Tests for the frontend.** `C64Bot.Libretro.Tests`: option default parsing, loading a missing file or a DLL that isn't a core, the order checks, `Dispose` twice, the frame clock's timing, and tests on the real core, which run Lode Runner to the trainer menu once and share it: RAM, options, the picture's size, and a key press answering the menu. The tests that need the core DLL or the disk are skipped on a PC without them. 23 tests, about 4 seconds.
-- [ ] **T8. Snapshots.** `retro_serialize_size`, `retro_serialize` and `retro_unserialize`, in memory. Check: take a snapshot once the level has started, move the player, load the snapshot, and the player is back where it was. Then decide the open question about the trainer menu: every run could start from a snapshot taken after it.
+- [x] **T8. Snapshots.** `LibretroCore.SaveState` and `LoadState` save and load the whole machine in memory, through `retro_serialize_size`, `retro_serialize` and `retro_unserialize`. A save state is libretro's word for what VICE calls a snapshot. In the app's console, T saves a state and L loads it; the fixed key presses from T7 are gone from the app, so the demo just runs. Tests: loading a state brings back all 64 KB of RAM exactly, and an empty or broken state is refused. Check: save a state while the demo plays, let it play on, load the state, and the demo jumps back to that moment. It did (2026-11-15). Two runs from the same state don't repeat exactly, because of VICE's key delay (see Notes).
 - [ ] **T9. Debug mode.** The T6 loop with a different rule: one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
 - [ ] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. Check: you can play level 1 in our window. M3 needs this to record a human playing.
 - [ ] **T11. Sound (optional).** Play the core's sound samples on the PC. Needs an audio library; choose it in this step.
@@ -87,7 +87,13 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
   - The core asks for each RetroPad button separately, every frame, on ports 0–5 (we declined the bitmask that answers them all at once).
   - Proof that the joystick reaches the C64: a 9-byte routine at `$C000`, hooked into the interrupt vector during the trainer menu, copied `$DC00` (joystick port 2) to `$C100` every interrupt. Right, left, up and fire each pulled their own bit low (values in `lode-runner.md`).
   - The game itself got in the way: fire doesn't start it (SPACE does), and the trainer's invincibility makes the demo get stuck, after which SPACE does nothing either. Both cost a long detour, because the frontend was right all along. Headless runs that save pictures as PNG files at chosen frames were what finally showed what the game was doing.
-- **Runs aren't exactly repeatable** (seen in T7, 2026-11-15): two runs with the same disk and the same key presses on the same frames had 63 bytes of RAM different at frame 1300 (zero page, the stack and a few game bytes), and the demo played out differently later on. Something in the core differs from run to run. M3 needs exact replays, so this needs looking into (see Open questions in `PLAN.md`).
+- **Runs aren't exactly repeatable** (seen in T7, 2026-11-15): two runs with the same disk and the same key presses on the same frames had 63 bytes of RAM different at frame 1300 (zero page, the stack and a few game bytes), and the demo played out differently later on.
+- **Save states, seen in T8** (2026-11-15):
+  - A state is about 190 KB (193,849 bytes at the trainer menu) and holds 30 parts: CPU, RAM, CIAs, SID, VIC-II, the disk drive, keyboard, joysticks and so on. The disk's contents aren't in it, only its file name, so a state needs the same disk inserted.
+  - Before saving or loading, the core lets the emulated CPU finish its current instruction. `retro_serialize_size` measures the size by saving a whole state, so `SaveState` asks every time.
+  - Loading a state is complete: load, save, load the same state, save again, and the two saved states are identical byte for byte.
+  - **Two runs from the same state with the same key presses still differ,** from the second frame on. VICE hands a key press to the C64 after 1,000 cycles plus a random 1 to 19,656 cycles (up to a frame), to imitate a person's uneven timing. Its random number generator isn't in the save state, and no core option turns the delay off (VICE's `keyboard.c` and `lib.c`). This probably also explains T7's 63 bytes. Not checked: whether the joystick has a delay like it.
+  - So exact replays aren't possible with key presses. The bot doesn't need them: it reacts to the state every frame (D4). If M3 wants exact replays, check there whether joystick-only runs from a state repeat.
 - **Measurements from T5** (2026-11-15, during a level, 10 seconds): 100.0% speed by the jiffy clock; frames 19.927–19.974 ms apart (19.950 ms on average); emulating a frame took 1.48 ms on average, 2.10 ms at worst; the program used 11% of one CPU core. The first attempt showed 84.7%, because measuring started right at the level start, when the game stops its interrupt routine for about 1.5 s and the jiffy clock stands still.
 
 ## Part 1: the VICE program's binary monitor
