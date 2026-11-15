@@ -5,6 +5,7 @@
     <Project Path="src/C64Bot.ViceMonitor/C64Bot.ViceMonitor.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/C64Bot.Libretro.Tests/C64Bot.Libretro.Tests.csproj" />
     <Project Path="tests/C64Bot.ViceMonitor.Tests/C64Bot.ViceMonitor.Tests.csproj" />
   </Folder>
 </Solution>

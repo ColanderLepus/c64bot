@@ -1,13 +1,13 @@
 # M1: Connect C# to the emulator
 
-**Status:** In progress (part 1 done and replaced; part 2: T1–T7 done)
+**Status:** In progress (part 1 done and replaced; part 2: T1–T7, R1 and R3 done)
 
 Make a C64 emulator controllable from C#: read memory, send input, control the timing and show the picture. The bot plays at real-time speed (D4), so this has to work about 50 times a second without changing the game's speed.
 
 M1 has two parts:
 
 - **Part 1** (S1–S6, 2026-11-14) built a client for the VICE program's binary monitor. It works, but S6 showed that talking to a running VICE upsets its timing, so real-time play needed workarounds.
-- **Part 2** (T1–T6, 2026-11-15, first as a trial on the branch `try-libretro-core`) runs the emulator inside our program as a libretro core instead, using VICE's C64 emulator as the core. D2, D4 and D8 were changed to this.
+- **Part 2** (from 2026-11-15) runs the emulator inside our program as a libretro core instead, using VICE's C64 emulator as the core. T1–T6 were a trial on the branch `try-libretro-core`; it worked, D2, D4 and D8 were changed to it, and the branch was merged into `main`. The steps go on from T7.
 
 ## Tasks
 
@@ -17,6 +17,7 @@ M1 has two parts:
 - [x] Real-time loop at the real C64's speed (T5)
 - [x] Show the picture (T6)
 - [x] Joystick input (T7)
+- [x] Tidy up and test the frontend (R1, R3)
 - [ ] Save and load snapshots
 - [ ] Debug mode: one frame per key press
 - [ ] Keyboard and joystick from the window, so a human can play
@@ -28,10 +29,13 @@ A **libretro core** is an emulator built as a DLL with a plain C interface (`lib
 
 How the frontend sets up the core:
 
-1. Give the core its callbacks: environment (the core's questions to the frontend), video refresh, audio, input poll and input state.
-2. Set any core options that differ from their defaults (the core announces them in `retro_set_environment`).
-3. `retro_init`, then `retro_load_game` with the disk's path, then `retro_get_system_av_info`, then `retro_set_controller_port_device` to plug a RetroPad into the first port.
-4. `retro_run` once per frame. `retro_get_memory_data` gives a pointer to the C64's 64 KB RAM.
+1. Load the DLL and look up all its libretro functions once. Every core has all of them, so a missing one means the DLL isn't a core.
+2. Give the core its callbacks: environment (the core's questions to the frontend), video refresh, audio, input poll and input state.
+3. Set any core options that differ from their defaults (the core announces them in `retro_set_environment`).
+4. `retro_init`, then `retro_load_game` with the disk's path, then `retro_get_system_av_info`, then `retro_set_controller_port_device` to plug a RetroPad into the first port.
+5. `retro_run` once per frame. `retro_get_memory_data` gives a pointer to the C64's 64 KB RAM.
+
+`LibretroCore` checks that the steps come in this order, and throws if they don't, instead of letting the core crash.
 
 Environment commands the frontend answers (numbers as in `libretro.h`):
 
@@ -56,6 +60,9 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
 - [x] **T5. A steady clock.** A frame clock (`FrameClock`) that sleeps on a high-resolution Windows timer and spins only for the last millisecond. Check: the jiffy clock showed 100.0% speed over 10 seconds.
 - [x] **T6. The picture in a window.** A WPF window (D11) on its own thread shows the newest picture from the core; the emulation runs on the frame clock until the window closes. Check: Lode Runner ran in our window at normal speed and looked smooth.
 - [x] **T7. Joystick.** Answer the core's input state questions for the RetroPad (libretro's standard gamepad), whose D-pad and B button the core turns into the C64 joystick and fire button. The core option `vice_joyport` chooses the C64 port; it's set to 2. The app answers the trainer with Y (unlimited lives) and N (invincibility), taps SPACE at frame 1000 to leave the demo, and holds right from frame 1100 to 1700. Check: the C64 read the right bits at `$DC00`, and the player walked right along the bottom row once the level was ready. Fixed frames will do until the game's state can be read (M2). See Notes for what got in the way.
+- [x] **R1. Tidy up `LibretroCore`** (after a review of all code and documents, 2026-11-15). The core's functions are looked up once at load time instead of on every call; a DLL that isn't a core is rejected at once. The class checks that its steps come in the right order, and `Dispose` can safely be called twice. No exception can escape a callback into the core. Option defaults are parsed safely. The members are in the order they're used, split over three files: the public API, the callbacks, and the C side (functions and structs). Thread safety is documented: one thread only. `C64Bot.Libretro` targets `net10.0-windows`, because `FrameClock` needs Windows; the clock now also reports a failed wait and can be disposed twice.
+- [ ] **R2. Split up `Program.cs`.** Not done: the app has no real role yet beyond showing what happens, so it stays as it is for now (owner's call, 2026-11-15).
+- [x] **R3. Tests for the frontend.** `C64Bot.Libretro.Tests`: option default parsing, loading a missing file or a DLL that isn't a core, the order checks, `Dispose` twice, the frame clock's timing, and tests on the real core, which run Lode Runner to the trainer menu once and share it: RAM, options, the picture's size, and a key press answering the menu. The tests that need the core DLL or the disk are skipped on a PC without them. 23 tests, about 4 seconds.
 - [ ] **T8. Snapshots.** `retro_serialize_size`, `retro_serialize` and `retro_unserialize`, in memory. Check: take a snapshot once the level has started, move the player, load the snapshot, and the player is back where it was. Then decide the open question about the trainer menu: every run could start from a snapshot taken after it.
 - [ ] **T9. Debug mode.** The T6 loop with a different rule: one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
 - [ ] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. Check: you can play level 1 in our window. M3 needs this to record a human playing.
@@ -72,7 +79,9 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
   - 50.125 frames a second (PAL), sound at 48,000 Hz, pictures of 384×272.
   - The picture comes in 16-bit colour by default. The core option `vice_gfx_colors` = `24bit` switches to XRGB8888, which in memory is what WPF calls `Bgr32` (blue, green, red, unused).
   - Key presses go to the C64's keyboard matrix at the next frame, like real keys, not into the keyboard buffer. The core ignores the character and the modifiers in the event.
-  - From loading the disk to the trainer menu takes 2,532 frames (the disk drive is emulated accurately). Flat out, that's a few seconds.
+  - From loading the disk to the trainer menu takes 2,532 frames, about 50 emulated seconds. Flat out, that's a few seconds.
+  - `SystemRam` is plain RAM only. Where the C64 shows ROM or I/O chips instead, it holds the RAM underneath, so for example the joystick port at `$DC00` can't be read through it (T7 needed a routine running on the C64 for that).
+- **Half-updated state.** RAM is read when `retro_run` returns, at the end of a frame. The game updates its state in its interrupt routine (60 times a second) and maybe its main loop, neither of which lines up with the end of a frame. So a read can catch the game halfway through an update (for example, a guard's X position changed but not its Y position). Check this in M2. Possible fixes: read twice a frame apart and compare, or wait for a counter the game sets when it's done.
 - **Joystick, seen in T7** (2026-11-15):
   - The core keeps a "device plugged in" per RetroPad port, starting with none, and ignores the buttons of an empty port. RetroArch plugs a RetroPad in after loading a game with `retro_set_controller_port_device`; our frontend must do the same.
   - The core asks for each RetroPad button separately, every frame, on ports 0–5 (we declined the bitmask that answers them all at once).
@@ -116,7 +125,7 @@ Things that shape the client design:
 
 - **Any command stops the emulator**, like the normal monitor. VICE then sends events on its own: register info (`0x31`) and stopped (`0x62`). The **Exit** command (`0xAA`) resumes it.
 - So responses and events arrive mixed together on the same connection. The client needs one reader that matches responses to requests by request ID and hands events to whoever listens for them.
-- Stopping and resuming a running VICE upsets its own speed regulation, so short visits make the game run too fast (S6, see Notes). The real-time loop therefore lets VICE stop by itself at a checkpoint, and resumes it on our own clock.
+- Stopping and resuming a running VICE upsets its own speed regulation, so short visits made the game run too fast (S6, see Notes). The real-time loop therefore let VICE stop by itself at a checkpoint, and resumed it on our own clock, until part 2 replaced all this.
 
 Commands part 1 used, or had planned for its dropped steps:
 
@@ -150,7 +159,7 @@ The order put the risky parts early. S6 and S7 were to test the two things real-
 
 - Start VICE with `-binarymonitor`; see the Commands section in `.claude/CLAUDE.md`.
 - The manual lists [vice-bridge-net](https://github.com/MihaMarkic/vice-bridge-net), an existing .NET library for this protocol. We write our own (D8), but it's a good reference if something is unclear.
-- **Half-updated state.** The S6 loop always stops VICE at the start of the game's interrupt routine, so a read sees the state between two runs of it. If the game also updates its state outside the interrupt routine (in its main loop), a read can still catch it halfway (for example, a guard's X position changed but not its Y position). Check this in M2.
+- **Half-updated state, in part 1.** The S6 loop always stopped VICE at the start of the game's interrupt routine, so a read saw the state between two runs of it. Part 2 reads at the end of a frame instead; see the notes of part 2.
 - **VICE resumes when the connection closes** (seen in S3, 2026-11-14): after a ping the emulator froze, and it started running again as soon as the app disconnected, without an Exit command. So a crashed or stopped bot doesn't leave VICE frozen.
 - **Events around a command** (seen in S4, 2026-11-14, at the `READY.` prompt):
   - A ping while running: the ping is answered, then VICE sends `RegisterInfo` (42 bytes) and `Stopped` (PC = `$E5D1`, inside the KERNAL loop that waits for a key press).

@@ -4,8 +4,9 @@ namespace C64Bot.ViceMonitor.Protocol;
 /// The kinds of command that can be sent to VICE's binary monitor.
 /// </summary>
 /// <remarks>
-/// Sent as byte 10 of the command header. Only the commands this project uses are listed. Section
-/// 13.4 of the VICE manual describes all of them, including the layout of each command's body.
+/// Sent as byte 10 of the command header. Only the commands this project used or planned to use (M1
+/// part 1) are listed. Section 13.4 of the VICE manual describes all of them, including the layout of
+/// each command's body.
 /// </remarks>
 public enum CommandType : byte
 {

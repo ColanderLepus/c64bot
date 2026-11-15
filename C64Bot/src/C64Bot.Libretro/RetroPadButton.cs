@@ -9,7 +9,7 @@ namespace C64Bot.Libretro;
 /// and <see cref="B"/> into its fire button, on the port chosen by the core option <c>vice_joyport</c>. Only
 /// the buttons this project uses are listed.
 /// </remarks>
-public enum RetroPadButton
+public enum RetroPadButton : uint
 {
     /// <summary>
     /// The fire button, in the VICE core.

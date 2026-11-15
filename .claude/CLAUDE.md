@@ -36,7 +36,7 @@ C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor                             
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"      # with Lode Runner version A
 ```
 
-The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`), but not the VICE program. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
+The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`), but not the VICE program. So do the tests in `C64Bot.Libretro.Tests` that run the core: they also need the Lode Runner disk, and are skipped (not failed) on a PC without them. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
 
 ## Conventions
 
