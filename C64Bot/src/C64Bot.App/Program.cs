@@ -2,6 +2,7 @@
 using System.Windows;
 using C64Bot.App;
 using C64Bot.Libretro;
+using C64Bot.LodeRunner;
 
 const string CorePath = @"C:\Tools\C64\libretro\vice_x64sc_libretro.dll";
 const string DiskPath = @"C:\Emulation\ROMs\C64\Lode Runner.d64";
@@ -74,6 +75,12 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     RamImage? rememberedRam = null;
     var rememberedAt = 0;
 
+    // M2 F4: say when the game's phase changes, with the bytes the phase is read from, and when the level number
+    // changes (it goes up as soon as a level is completed).
+    var phaseReader = new GamePhaseReader();
+    GamePhase? phase = null;
+    int? level = null;
+
     for (var frame = 1; !windowClosed.IsSet; frame++)
     {
         input.ApplyTo(core);
@@ -107,6 +114,24 @@ using (var clock = new FrameClock(core.FramesPerSecond))
 
         clock.WaitForNextFrame();
         core.RunFrame();
+
+        var newPhase = phaseReader.Update(core.SystemRam);
+        if (newPhase != phase)
+        {
+            phase = newPhase;
+            var ram = core.SystemRam;
+            Console.WriteLine(
+                $"Frame {frame}: {phase} (" +
+                $"game mode ${ram[RamMap.GameMode]:X2}, alive ${ram[RamMap.Alive]:X2}, " +
+                $"gold left ${ram[RamMap.GoldLeft]:X2}, lives ${ram[RamMap.Lives]:X2}, " +
+                $"interrupt counter ${ram[RamMap.InterruptCounter]:X2})");
+        }
+
+        if (phase is not (GamePhase.Other or GamePhase.Title or GamePhase.Demo) && core.SystemRam[RamMap.Level] != level)
+        {
+            level = core.SystemRam[RamMap.Level];
+            Console.WriteLine($"Frame {frame}: level {level}");
+        }
     }
 }
 

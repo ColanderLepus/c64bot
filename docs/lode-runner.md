@@ -24,7 +24,7 @@ Version A's trainer changes three things in the game's code (M2 F2, 2026-11-15),
 
 - `$6008`: the call to the copy protection is `NOP`ed out (`JSR $8E11` → `EA EA EA`), always.
 - `$61A2`: with Y to unlimited lives, `DEC $1312` (take a life) becomes `BIT $1312`, which does nothing. So the life counter never goes down.
-- `$611F`: in the main loop, `LDA $1314` becomes `JSR $0334`, a routine of the trainer's in the cassette buffer. It does the replaced `LDA $1314`, but if C= is held (`$DC01` bit 5), it leaves the main loop and jumps to the game's own "level complete" (`$6162`). So a C= skip also gives a life and 1,500 points, like finishing the level.
+- `$611F`: in the main loop, `LDA $1314` becomes `JSR $0334`, a routine of the trainer's in the cassette buffer. It does the replaced `LDA $1314`, but if C= is held (`$DC01` bit 5), it leaves the main loop and jumps to the game's own "level complete" (`$6162`). So a C= skip also gives a life and 1,500 points, like finishing the level. Seen in M2 F4: on C= the level number went up at once and the lives went 5 → 6.
 
 Checked with Y to unlimited lives and N to invincibility (D6). Not checked: the other answers, though N to unlimited lives presumably leaves `$61A2` alone.
 
@@ -39,6 +39,8 @@ Observations about the game itself, gathered while playing and in the libretro c
 - **Title screen and demo** (2026-11-15): after the menu the game shows its title screen, then plays itself (the demo). The demo is running by about frame 1000 (20 s). Pressing SPACE during the demo starts the real game; fire doesn't (fire on port 2 at frame 1000 left the demo running, in the libretro core). The interrupt vector points to `$648A` from the title screen on, so it doesn't tell the title, the demo and the game apart.
 - **Invincibility breaks the demo** (libretro core, 2026-11-15): with the trainer's invincibility on, the demo player gets stuck after about 5 seconds (at the bottom of the left ladder of the demo level, with a guard on top of him), and from then on SPACE no longer starts the game. With invincibility off, the demo keeps playing and SPACE works. Unlimited lives doesn't break it. Presumably the demo replays recorded moves, and a player who can't be caught falls out of step with them (not checked).
 - **Starting a level** (libretro core, invincibility off, 2026-11-15): after SPACE the screen goes black with the score at 0, then the level builds up bit by bit for about 10 seconds, and a level 1 different from the demo's appears. While the level is set up, the interrupt routine stops for about 1.5 s, so the jiffy clock stands still. A joystick direction then makes the player move: holding right from frame 1100 on made him walk right along the bottom row and pick up gold once the level was ready. In a run where nobody touched the joystick, a man was lost by frame 1990, presumably because a guard caught the player standing still (not checked).
+- **Level start times** (libretro core, M2 F4, 2026-11-15, level 1, a joystick direction held until the level runs): from SPACE in the demo until the level runs, 644 frames (about 13 s). After a death, 11–12 frames of dying, then 885 frames (about 18 s) until the level runs again: it's drawn again from scratch. A player standing still on level 1 was caught about 247 frames (5 s) after the level started running, every time.
+- **The first move must be held** (M2 F4): the game reads the joystick for the first move only once the level is ready, and RAM doesn't show when that is. A short tap can come too early and be lost; a direction held until the level runs always worked.
 
 ### Controls
 
@@ -81,7 +83,7 @@ Tile codes: 0 empty, 1 brick (diggable), 2 solid block, 3 ladder, 4 rope, 5 trap
 | `$05` | 1 | Position within the tile, left to right: 0–4, 2 = centred | |
 | `$06` | 1 | Position within the tile, top to bottom: 0–4, 2 = centred | |
 | `$07` | 1 | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` dig left, `$07` fall left, `$08`–`$0F` the same facing right, `$10`–`$11` ladder | |
-| `$1314` | 1 | Alive: 1 alive, 0 dead (caught, trapped in a hole, or the demo ended) | |
+| `$1314` | 1 | Alive: 1 alive, 0 dead (caught, trapped in a hole, or the demo ended) | Confirmed (F4): 0 from each death until the level is set up again, and from the end of the demo until the new game's level is set up. |
 | `$1315` | 1 | Falling: `$00` falling, `$20` not, `$FF` at the start | |
 | `$1316` | 1 | Digging: `$00` no, `$01` right, `$FF` left | |
 
@@ -119,18 +121,18 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| `$1305` | 1 | Level number, 1–150 | |
-| `$1306` | 1 | Game mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list show), 3 play from the level editor, 5 level editor | Confirmed (F1, F2): 1 in the demo, 2 in level 1. |
+| `$1305` | 1 | Level number, 1–150. Goes up at the start of the game's "level complete", before the score is counted up, and with a level skip. | Confirmed (F2): 1 in level 1. |
+| `$1306` | 1 | Game mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list show), 3 play from the level editor, 5 level editor | Confirmed (F1, F2, F4): 0 on the title screen, 1 in the demo, 2 from SPACE until the title screen comes back after game over. Leftovers before the game runs (3 was seen during loading). |
 | `$130A`–`$130D` | 4 | Score, BCD (two digits per byte), lowest byte first | Confirmed (F1): 250 after a gold. |
 | `$130E` | 1 | Gold left in the level | Confirmed (F1): one less after a gold. |
 | `$1310` | 1 | Level number as stored on disk, 0–149 | |
-| `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2): 5 in level 1. |
+| `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2, F4): 5 in level 1, one less per death with N to unlimited lives, 0 at the last death. |
 | `$1318` | 1 | Cheated (no high score): `$00` yes, `$01` no | |
 | `$1319` | 1 | Joystick up/down as the game read it: `$00` none, `$21` up, `$25` down; `$1E` and `$26` when digging left and right | |
 | `$131A` | 1 | Joystick left/right: `$00` none, `$22` left, `$2A` right; `$1E` and `$26` when digging | Confirmed (F1): `22` → `2A` as the demo turned right. |
 | `$131B` | 1 | Game speed: the main loop waits until the interrupt counter reaches it, so 5 (normal) means a pass every 2 interrupts. 3–8. | |
 | `$132A` | 1 | Death tune: not 0 while it plays after the player dies | |
-| `$132D` | 1 | Interrupt counter: counted up by every interrupt, set to 3 after each pass. The main loop waits until it reaches the game speed (`$131B`). | Changing (F1). |
+| `$132D` | 1 | Interrupt counter: counted up by every interrupt, set to 3 after each pass. The main loop waits until it reaches the game speed (`$131B`). Nothing else sets it back, so it only counts up while the main loop isn't running. | Confirmed (F4): read this way, "main loop running" matched every stretch of play to game over. |
 | `$1339` | 1 | Dig side: `$00` behind the player, `$FF` in front (Ctrl+D toggles it) | |
 
 ### Code addresses

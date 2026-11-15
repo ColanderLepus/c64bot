@@ -80,10 +80,12 @@ c64bot/                             repo root: only repo-wide files
     ├── Directory.Build.props       shared build settings for every project
     ├── src/
     │   ├── C64Bot.App/             WPF app that runs the bot (with a console for log lines)
-    │   ├── C64Bot.Libretro/        emulator layer: libretro frontend and frame clock
+    │   ├── C64Bot.Libretro/        emulator layer: libretro frontend, frame clock, RAM-compare tool
+    │   ├── C64Bot.LodeRunner/      game adapter for Lode Runner: reads the game from RAM (D12)
     │   └── C64Bot.ViceMonitor/     binary monitor client for the VICE program (M1 part 1)
     └── tests/
         ├── C64Bot.Libretro.Tests/  some need the core DLL and the Lode Runner disk, and are skipped without them
+        ├── C64Bot.LodeRunner.Tests/
         └── C64Bot.ViceMonitor.Tests/
 ```
 

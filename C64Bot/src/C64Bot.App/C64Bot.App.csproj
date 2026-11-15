@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\C64Bot.Libretro\C64Bot.Libretro.csproj" />
+    <ProjectReference Include="..\C64Bot.LodeRunner\C64Bot.LodeRunner.csproj" />
   </ItemGroup>
 
 </Project>

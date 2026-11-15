@@ -2,10 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/C64Bot.App/C64Bot.App.csproj" />
     <Project Path="src/C64Bot.Libretro/C64Bot.Libretro.csproj" />
+    <Project Path="src/C64Bot.LodeRunner/C64Bot.LodeRunner.csproj" />
     <Project Path="src/C64Bot.ViceMonitor/C64Bot.ViceMonitor.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/C64Bot.Libretro.Tests/C64Bot.Libretro.Tests.csproj" />
+    <Project Path="tests/C64Bot.LodeRunner.Tests/C64Bot.LodeRunner.Tests.csproj" />
     <Project Path="tests/C64Bot.ViceMonitor.Tests/C64Bot.ViceMonitor.Tests.csproj" />
   </Folder>
 </Solution>
