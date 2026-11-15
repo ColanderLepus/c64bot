@@ -19,15 +19,21 @@ core.Log = message =>
         Console.WriteLine(message);
 };
 
-// 24-bit colour, so the pictures come in the format WPF shows directly.
-core.Initialize(systemDirectory, saveDirectory, new Dictionary<string, string> { ["vice_gfx_colors"] = "24bit" });
+core.Initialize(systemDirectory, saveDirectory, new Dictionary<string, string>
+{
+    ["vice_gfx_colors"] = "24bit", // the pictures come in the format WPF shows directly
+    ["vice_joyport"] = "2",        // the first RetroPad is the joystick in port 2, which Lode Runner reads
+});
+
 core.LoadGame(DiskPath);
 Console.WriteLine($"Lode Runner loaded: {core.FramesPerSecond:F3} frames a second.");
 
+// The trainer menu: unlimited lives yes, invincibility no (with invincibility, the demo gets stuck and
+// SPACE no longer starts the game; see lode-runner.md).
 RunUntil("The trainer menu asks about unlimited lives", () => ScreenText().Contains("UNLIMITED LIVES"), 3000);
 Type(RetroKey.Y);
 RunUntil("It asks about invincibility", () => ScreenText().Contains("INVINCIBILITY"), 250);
-Type(RetroKey.Y);
+Type(RetroKey.N);
 RunUntil("It explains the level skip", () => ScreenText().Contains("SKIPS"), 250);
 PrintTextScreen();
 Type(RetroKey.Space);
@@ -52,10 +58,55 @@ windowThread.Start();
 Console.WriteLine("Running in real time. Close the window to stop.");
 using (var clock = new FrameClock(core.FramesPerSecond))
 {
-    while (!windowClosed.IsSet)
+    // T7: after the trainer menu the game shows its title screen and then plays itself (the demo), until
+    // SPACE is pressed. So: tap SPACE once the demo runs (frame 1000), then hold the joystick right from
+    // frame 1100 to 1700. The level takes about 10 seconds to build up, and the player starts walking as
+    // soon as it's ready. Until we can read the game's state (M2), these are fixed frames.
+    // Keys in this console window can press things too: S taps SPACE, R holds right for one second, F taps
+    // fire.
+    const int SpaceAt = 1000;
+    const int RightFrom = 1100;
+    const int RightUntil = 1700;
+    Console.WriteLine($"SPACE at frame {SpaceAt}, right from frame {RightFrom} to {RightUntil}.");
+    Console.WriteLine("In this console window: S taps SPACE, R holds right for one second, F taps fire.");
+
+    // What to let go of, and at which frame.
+    var releases = new List<(int Frame, Action Release, string Name)>();
+
+    for (var frame = 1; !windowClosed.IsSet; frame++)
     {
+        if (frame == SpaceAt)
+            Hold(() => core.PressKey(RetroKey.Space), () => core.ReleaseKey(RetroKey.Space), 5, frame, "SPACE");
+        else if (frame == RightFrom)
+            Hold(() => core.PressButton(RetroPadButton.Right), () => core.ReleaseButton(RetroPadButton.Right), RightUntil - RightFrom, frame, "right");
+
+        while (Console.KeyAvailable)
+        {
+            var key = Console.ReadKey(intercept: true).Key;
+            if (key == ConsoleKey.S)
+                Hold(() => core.PressKey(RetroKey.Space), () => core.ReleaseKey(RetroKey.Space), 5, frame, "SPACE");
+            else if (key == ConsoleKey.R)
+                Hold(() => core.PressButton(RetroPadButton.Right), () => core.ReleaseButton(RetroPadButton.Right), 50, frame, "right");
+            else if (key == ConsoleKey.F)
+                Hold(() => core.PressButton(RetroPadButton.B), () => core.ReleaseButton(RetroPadButton.B), 5, frame, "fire");
+        }
+
+        foreach (var release in releases.Where(r => r.Frame == frame).ToList())
+        {
+            release.Release();
+            releases.Remove(release);
+            Console.WriteLine($"Frame {frame}: released {release.Name}.");
+        }
+
         clock.WaitForNextFrame();
         core.RunFrame();
+    }
+
+    void Hold(Action press, Action release, int frames, int frame, string name)
+    {
+        press();
+        releases.Add((frame + frames, release, name));
+        Console.WriteLine($"Frame {frame} ({frame / core.FramesPerSecond:F1} s): holding {name} for {frames} frames.");
     }
 }
 

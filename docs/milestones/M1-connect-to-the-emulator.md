@@ -1,6 +1,6 @@
 # M1: Connect C# to the emulator
 
-**Status:** In progress (part 1 done and replaced; part 2: T1–T6 done)
+**Status:** In progress (part 1 done and replaced; part 2: T1–T7 done)
 
 Make a C64 emulator controllable from C#: read memory, send input, control the timing and show the picture. The bot plays at real-time speed (D4), so this has to work about 50 times a second without changing the game's speed.
 
@@ -16,7 +16,7 @@ M1 has two parts:
 - [x] Keyboard input (T4)
 - [x] Real-time loop at the real C64's speed (T5)
 - [x] Show the picture (T6)
-- [ ] Joystick input
+- [x] Joystick input (T7)
 - [ ] Save and load snapshots
 - [ ] Debug mode: one frame per key press
 - [ ] Keyboard and joystick from the window, so a human can play
@@ -30,7 +30,7 @@ How the frontend sets up the core:
 
 1. Give the core its callbacks: environment (the core's questions to the frontend), video refresh, audio, input poll and input state.
 2. Set any core options that differ from their defaults (the core announces them in `retro_set_environment`).
-3. `retro_init`, then `retro_load_game` with the disk's path, then `retro_get_system_av_info`.
+3. `retro_init`, then `retro_load_game` with the disk's path, then `retro_get_system_av_info`, then `retro_set_controller_port_device` to plug a RetroPad into the first port.
 4. `retro_run` once per frame. `retro_get_memory_data` gives a pointer to the C64's 64 KB RAM.
 
 Environment commands the frontend answers (numbers as in `libretro.h`):
@@ -55,7 +55,7 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
 - [x] **T4. Keyboard.** Press and release keys through the core's keyboard callback. Check: Y, Y and SPACE went through the trainer menu, and the game's own interrupt routine at `$648A` took over, as in the VICE program.
 - [x] **T5. A steady clock.** A frame clock (`FrameClock`) that sleeps on a high-resolution Windows timer and spins only for the last millisecond. Check: the jiffy clock showed 100.0% speed over 10 seconds.
 - [x] **T6. The picture in a window.** A WPF window (D11) on its own thread shows the newest picture from the core; the emulation runs on the frame clock until the window closes. Check: Lode Runner ran in our window at normal speed and looked smooth.
-- [ ] **T7. Joystick.** Answer the core's input state questions for the RetroPad (libretro's standard gamepad), whose D-pad and B button the core turns into the C64 joystick and fire button. Find out which core option chooses the C64 port, and set port 2. Check: the app holds right for one second, then lets go, and the player walks right and stops.
+- [x] **T7. Joystick.** Answer the core's input state questions for the RetroPad (libretro's standard gamepad), whose D-pad and B button the core turns into the C64 joystick and fire button. The core option `vice_joyport` chooses the C64 port; it's set to 2. The app answers the trainer with Y (unlimited lives) and N (invincibility), taps SPACE at frame 1000 to leave the demo, and holds right from frame 1100 to 1700. Check: the C64 read the right bits at `$DC00`, and the player walked right along the bottom row once the level was ready. Fixed frames will do until the game's state can be read (M2). See Notes for what got in the way.
 - [ ] **T8. Snapshots.** `retro_serialize_size`, `retro_serialize` and `retro_unserialize`, in memory. Check: take a snapshot once the level has started, move the player, load the snapshot, and the player is back where it was. Then decide the open question about the trainer menu: every run could start from a snapshot taken after it.
 - [ ] **T9. Debug mode.** The T6 loop with a different rule: one frame per key press in the window, and a key to switch between that and real time. Check: each press advances the game by one frame, and holding the key runs it in slow motion.
 - [ ] **T10. Play in the window.** The window's keyboard goes to the C64's keyboard, and some keys work as the joystick. Check: you can play level 1 in our window. M3 needs this to record a human playing.
@@ -73,6 +73,12 @@ Done one step at a time, checking each before starting the next. T1–T6 were th
   - The picture comes in 16-bit colour by default. The core option `vice_gfx_colors` = `24bit` switches to XRGB8888, which in memory is what WPF calls `Bgr32` (blue, green, red, unused).
   - Key presses go to the C64's keyboard matrix at the next frame, like real keys, not into the keyboard buffer. The core ignores the character and the modifiers in the event.
   - From loading the disk to the trainer menu takes 2,532 frames (the disk drive is emulated accurately). Flat out, that's a few seconds.
+- **Joystick, seen in T7** (2026-11-15):
+  - The core keeps a "device plugged in" per RetroPad port, starting with none, and ignores the buttons of an empty port. RetroArch plugs a RetroPad in after loading a game with `retro_set_controller_port_device`; our frontend must do the same.
+  - The core asks for each RetroPad button separately, every frame, on ports 0–5 (we declined the bitmask that answers them all at once).
+  - Proof that the joystick reaches the C64: a 9-byte routine at `$C000`, hooked into the interrupt vector during the trainer menu, copied `$DC00` (joystick port 2) to `$C100` every interrupt. Right, left, up and fire each pulled their own bit low (values in `lode-runner.md`).
+  - The game itself got in the way: fire doesn't start it (SPACE does), and the trainer's invincibility makes the demo get stuck, after which SPACE does nothing either. Both cost a long detour, because the frontend was right all along. Headless runs that save pictures as PNG files at chosen frames were what finally showed what the game was doing.
+- **Runs aren't exactly repeatable** (seen in T7, 2026-11-15): two runs with the same disk and the same key presses on the same frames had 63 bytes of RAM different at frame 1300 (zero page, the stack and a few game bytes), and the demo played out differently later on. Something in the core differs from run to run. M3 needs exact replays, so this needs looking into (see Open questions in `PLAN.md`).
 - **Measurements from T5** (2026-11-15, during a level, 10 seconds): 100.0% speed by the jiffy clock; frames 19.927–19.974 ms apart (19.950 ms on average); emulating a frame took 1.48 ms on average, 2.10 ms at worst; the program used 11% of one CPU core. The first attempt showed 84.7%, because measuring started right at the level start, when the game stops its interrupt routine for about 1.5 s and the jiffy clock stands still.
 
 ## Part 1: the VICE program's binary monitor

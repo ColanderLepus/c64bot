@@ -24,6 +24,9 @@ public sealed unsafe class LibretroCore : IDisposable
     // libretro.h: RETRO_PIXEL_FORMAT_XRGB8888, 4 bytes per pixel.
     private const int PixelFormatXrgb8888 = 1;
 
+    // libretro.h: RETRO_DEVICE_JOYPAD, the RetroPad.
+    private const uint DeviceJoypad = 1;
+
     // libretro.h: the RETRO_ENVIRONMENT_* questions this frontend answers.
     private const uint EnvironmentGetSystemDirectory = 9;
     private const uint EnvironmentSetPixelFormat = 10;
@@ -49,6 +52,9 @@ public sealed unsafe class LibretroCore : IDisposable
 
     // The core's function for key presses, which it hands over with SET_KEYBOARD_CALLBACK.
     private delegate* unmanaged[Cdecl]<byte, uint, uint, ushort, void> _keyboardEvent;
+
+    // The RetroPad buttons held down on the first RetroPad, one bit per button, numbered as in RetroPadButton.
+    private int _pressedButtons;
 
     private LibretroCore(nint library) => _library = library;
 
@@ -181,6 +187,10 @@ public sealed unsafe class LibretroCore : IDisposable
         ((delegate* unmanaged[Cdecl]<RetroSystemAvInfo*, void>)Export("retro_get_system_av_info"))(&avInfo);
         FramesPerSecond = avInfo.Fps;
         SampleRate = avInfo.SampleRate;
+
+        // Frontends also say what's plugged into each port. Until then the core treats the first port as
+        // empty and ignores its buttons.
+        ((delegate* unmanaged[Cdecl]<uint, uint, void>)Export("retro_set_controller_port_device"))(0, DeviceJoypad);
     }
 
     /// <summary>
@@ -210,6 +220,17 @@ public sealed unsafe class LibretroCore : IDisposable
     /// </summary>
     /// <exception cref="InvalidOperationException">The core hasn't asked for key presses.</exception>
     public void ReleaseKey(RetroKey key) => SendKeyboardEvent(key, down: false);
+
+    /// <summary>
+    /// Holds down a button on the first RetroPad until <see cref="ReleaseButton"/>. The core sees it at the next
+    /// frame.
+    /// </summary>
+    public void PressButton(RetroPadButton button) => _pressedButtons |= 1 << (int)button;
+
+    /// <summary>
+    /// Lets go of a button pressed with <see cref="PressButton"/>.
+    /// </summary>
+    public void ReleaseButton(RetroPadButton button) => _pressedButtons &= ~(1 << (int)button);
 
     public void Dispose()
     {
@@ -350,9 +371,16 @@ public sealed unsafe class LibretroCore : IDisposable
     {
     }
 
-    // Nothing is pressed.
+    // The core asks about one button at a time. Only the first RetroPad has buttons; everything else is
+    // never pressed.
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static short OnInputState(uint port, uint device, uint index, uint id) => 0;
+    private static short OnInputState(uint port, uint device, uint index, uint id)
+    {
+        if (port != 0 || device != DeviceJoypad || id >= 16)
+            return 0;
+
+        return (short)((s_current!._pressedButtons >> (int)id) & 1);
+    }
 
     // struct retro_system_info in libretro.h. The C bools are single bytes; byte keeps the struct blittable.
     [StructLayout(LayoutKind.Sequential)]
