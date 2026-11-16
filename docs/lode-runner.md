@@ -36,7 +36,7 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 - **Loading** (libretro core, 2026-11-15): the trainer menu appears 2,532 frames, about 50 emulated seconds, after loading starts.
 - **Trainer menu** (libretro core, 2026-11-15): its text is in the screen memory at `$0400`: row 2 `UNLIMITED LIVES (Y/N) ?`, row 4 `TOTAL INVINCIBILITY (Y/N) ?`, row 7 `C= SKIPS LEVEL DURING GAME`, row 10 `(SPACE)`. Each answer is one key press, Y or N, and SPACE ends the menu. While the menu waits, the interrupt vector at `$0314`–`$0315` points to the KERNAL's own routine, `$EA31`; right after SPACE it points to the game's, `$648A`.
-- **Title screen and demo** (2026-11-15): after the menu the game shows its title screen, then plays itself (the demo). The demo is running by about frame 1000 (20 s). Pressing SPACE during the demo starts the real game; fire doesn't (fire on port 2 at frame 1000 left the demo running, in the libretro core). The interrupt vector points to `$648A` from the title screen on, so it doesn't tell the title, the demo and the game apart.
+- **Title screen and demo** (2026-11-15): after the menu the game shows its title screen, then plays itself (the demo). The demo is running by about frame 1000 (20 s). Pressing SPACE during the demo starts the real game. Fire on port 2 at frame 1000 left the demo running (M1 T7), although the disassembly says fire ends the demo too; why is an open question in `PLAN.md`. The interrupt vector points to `$648A` from the title screen on, so it doesn't tell the title, the demo and the game apart.
 - **Invincibility breaks the demo** (libretro core, 2026-11-15): with the trainer's invincibility on, the demo player gets stuck after about 5 seconds (at the bottom of the left ladder of the demo level, with a guard on top of him), and from then on SPACE no longer starts the game. With invincibility off, the demo keeps playing and SPACE works. Unlimited lives doesn't break it. Presumably the demo replays recorded moves, and a player who can't be caught falls out of step with them (not checked).
 - **Starting a level** (libretro core, invincibility off, 2026-11-15): after SPACE the screen goes black with the score at 0, then the level builds up bit by bit for about 10 seconds, and a level 1 different from the demo's appears. While the level is set up, the interrupt routine stops for about 1.5 s, so the jiffy clock stands still. A joystick direction then makes the player move: holding right from frame 1100 on made him walk right along the bottom row and pick up gold once the level was ready. In a run where nobody touched the joystick, a man was lost by frame 1990, presumably because a guard caught the player standing still (not checked).
 - **Level start times** (libretro core, M2 F4, 2026-11-15, level 1, a joystick direction held until the level runs): from SPACE in the demo until the level runs, 644 frames (about 13 s); from loading the disk to there, flat out, about 4,170 frames, 6.3 s (F5). After a death, 11–12 frames of dying, then 885 frames (about 18 s) until the level runs again: it's drawn again from scratch. A player standing still on level 1 was caught about 247 frames (5 s) after the level started running, every time.
@@ -62,10 +62,10 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 ### Technical
 
-- **Interrupt routine** (2026-11-14 and 2026-11-15): during the game the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. It stops for about 1.5 s while a level is set up, and once it didn't run for 1.2 s during a level. While the trainer menu waits, the vector points to the KERNAL's routine, `$EA31`. Not checked: whether it changes between levels.
+- **Interrupt routine** (2026-11-14 and 2026-11-15): during the game the vector at `$0314`–`$0315` points to the game's own routine at `$648A`. It runs about 60 times per emulated second, so it's driven by the CIA timer, not by the screen. It stops for about 1.5 s while a level is set up, and once it didn't run for 1.2 s during a level. While the trainer menu waits, the vector points to the KERNAL's routine, `$EA31`. It stays `$648A` between levels, after deaths and through game over: `GamePhaseReader` relies on that, and its phases stayed right through all of those in M2 F4–F10.
 - **Main loop** (from the disassembly, M2 F2): the interrupt routine only plays sound and reads the keyboard. Everything else happens in the main loop at `$611C`: one pass moves the player, closes holes and respawns guards, moves the guards, and then waits at `$6152` until the interrupt counter (`$132D`) reaches the game speed (`$131B`). At normal speed that's a pass every 2 interrupts, about 30 a second, against 50 frames a second. A hole timer counting down 31 in 50 frames agrees (F1).
 - **A pass takes more than half its time** (M2 F6, measured with the CPU's PC at the end of each frame): 55–62% of frame ends fall inside a pass, with 3 to 5 guards, most of it drawing (code at `$80xx`–`$8Dxx`). So RAM read after a frame is usually taken halfway through a pass. What's half done then is small: the guard being moved has his new position only in the zero-page copy and maybe the grid, while his table entry still has the last one (11–15% of frames), and about 1 frame in 3,000 has the player's tile missing from the grid.
-- **The level waits for the player** (from the disassembly): once a level is built, in a real game (not the demo) the player flickers and the main loop doesn't start until a key or the joystick is pressed.
+- **The level waits for the player** (from the disassembly): once a level is built, in a real game (not the demo) the player flickers and the main loop doesn't start until a key or the joystick is pressed. A new game's first level doesn't wait, because the SPACE that started the game counts (see Start-up).
 - **Jiffy clock** (`$A0`–`$A2`): the KERNAL's clock keeps counting during the game, about 60 times per emulated second, except while the interrupt routine stops. Over longer stretches it's a reliable measure of emulated time.
 
 ## Reading RAM
@@ -112,15 +112,15 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 | `$1260`+n | 1 each | Column of guard n; while he waits to respawn, the column he'll appear in | Confirmed (F1, F9): against the screen. |
 | `$1268`+n | 1 each | Row | Confirmed (F1, F9): against the screen. |
 | `$1270`+n | 1 each | Gold or hole timer. 0: free. Negative: he carries gold, counts up, and drops it at 0. Positive: he's stuck in a hole, counts down from the level's hole time (`$1320`); he shakes below `$0D` and climbs out below `$07`. `$7F` while he waits to respawn. | Confirmed (F9): `$F5` after picking up gold, `$26` on falling into a hole, `$7F` after dying. |
-| `$1278`+n | 1 each | Position within the tile, left to right (0–4, 2 = centred) | Changing (F1). |
-| `$1280`+n | 1 each | Position within the tile, top to bottom (0–4) | Changing (F1). |
-| `$1288`+n | 1 each | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` fall left, `$07`–`$0D` the same facing right, `$0E`–`$0F` ladder (no dig picture, unlike the player's) | |
+| `$1278`+n | 1 each | Position within the tile, left to right (0–4, 2 = centred) | Changing (F1). Read by `Guard` as an offset; not compared with the screen one by one. |
+| `$1280`+n | 1 each | Position within the tile, top to bottom (0–4) | Confirmed (F11): 0 (offset −2) for a guard at the top of a ladder tile, against the screen. |
+| `$1288`+n | 1 each | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` fall left, `$07`–`$0D` the same facing right, `$0E`–`$0F` ladder (no dig picture, unlike the player's) | Confirmed (F11): ladder, against the screen. Rope and fall not seen for a guard. |
 | `$1290`+n | 1 each | Facing: `$FF` left, `$01` right | Confirmed (F1): `FF` → `01` as a guard turned. |
 | `$1298`+n | 1 each | Respawn timer: 0 while he's in play; starts at `$14` (20 passes) when a guard dies; he reappears in two steps (at `$13` and `$0A`) and moves again at 0 | Confirmed (F9): 20 when the hole closed on him; he appeared 33 frames (20 passes) later. |
 | `$131E` | 1 | Respawn column: steps by one each pass, 0–27. A dead guard comes back on row 1 at the first empty tile (in the level as built) from this column on, trying the next rows if a row has none. So respawning isn't random. | Confirmed (F1, F9): one step per pass; a guard who died on level 1 came back at (26,1), an empty tile on row 1. |
-| `$131F` | 1 | The guard being moved (1–5) | |
-| `$15`–`$1B` | 7 | Working copy of the guard being moved: column, row, sprite, facing, gold or hole timer, position within the tile (left to right, top to bottom) | |
-| `$1320` | 1 | How long guards stay in a hole; set when a level starts, from a table indexed by `$1311` (0 in a new game) | |
+| `$131F` | 1 | The guard being moved (1–5) | Confirmed (F6): his working copy differed from his table entry in 11–15% of frames, as a move in progress would. Not read by the bot (D14). |
+| `$15`–`$1B` | 7 | Working copy of the guard being moved: column, row, sprite, facing, gold or hole timer, position within the tile (left to right, top to bottom) | Confirmed (F6), as for `$131F`. Not read by the bot (D14). |
+| `$1320` | 1 | How long guards stay in a hole; set when a level starts, from a table indexed by `$1311` (0 in a new game) | Confirmed (F9, F11): `$26` on level 1, the value a trapped guard's timer started at. |
 
 ### Holes and exit ladders
 
@@ -142,20 +142,23 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 | `$130E` | 1 | Gold left in the level, including gold carried by guards; `$FF` once the exit ladders have been shown | Confirmed (F1, F7, F10): one less after a gold; back to the level's full count after a death; `$FF` after the exit ladders appeared. |
 | `$1310` | 1 | Level number as stored on disk, 0–149. When a level starts, the game loads this one from disk (unless it's the one already loaded). | Confirmed (F5): written before a new game loads its level, it picks the level. |
 | `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2, F4, F10): 5 in level 1, one less per death with N to unlimited lives, 0 at the last death, one more at once on C=. |
-| `$1318` | 1 | Cheated (no high score): `$00` yes, `$01` no | |
-| `$1319` | 1 | Joystick up/down as the game read it: `$00` none, `$21` up, `$25` down; `$1E` and `$26` when digging left and right | |
-| `$131A` | 1 | Joystick left/right: `$00` none, `$22` left, `$2A` right; `$1E` and `$26` when digging | Confirmed (F1): `22` → `2A` as the demo turned right. |
-| `$131B` | 1 | Game speed: the main loop waits until the interrupt counter reaches it, so 5 (normal) means a pass every 2 interrupts. 3–8. | |
+| `$1318` | 1 | Cheated (no high score): `$00` yes, `$01` no | Seen (F11): `$01` in a new game. Not used by the bot. |
+| `$1319` | 1 | Joystick up/down as the game read it: `$00` none, `$21` up, `$25` down; `$1E` and `$26` when digging left and right | Seen (F11): `$21` holding up on a ladder; but `$FF` in both joystick bytes while holding fire on a ladder, not `$1E`/`$26`. Not used by the bot. |
+| `$131A` | 1 | Joystick left/right: `$00` none, `$22` left, `$2A` right; `$1E` and `$26` when digging | Confirmed (F1, F11): `22` → `2A` as the demo turned right; `$22` holding left. Not used by the bot. |
+| `$131B` | 1 | Game speed: the main loop waits until the interrupt counter reaches it, so 5 (normal) means a pass every 2 interrupts. 3–8. | Seen (F11): 5. The ~30 passes a second measured in F1 and F10 fit it. |
 | `$1328` | 1 | The last key pressed, as the interrupt routine stores it (0 = none). Read and cleared by the game's key commands; a waiting level starts when it's not 0. | Seen (F5): the SPACE that starts a game starts its first level. |
-| `$132A` | 1 | Death tune: not 0 while it plays after the player dies | |
+| `$132A` | 1 | Death tune: not 0 while it plays after the player dies | Not checked. Not used by the bot: `GamePhase` tells dying from `$1314`. |
 | `$132D` | 1 | Interrupt counter: counted up by every interrupt, set to 3 after each pass. The main loop waits until it reaches the game speed (`$131B`). Nothing else sets it back, so it only counts up while the main loop isn't running. | Confirmed (F4): read this way, "main loop running" matched every stretch of play to game over. |
-| `$1339` | 1 | Dig side: `$00` behind the player, `$FF` in front (Ctrl+D toggles it) | |
+| `$1339` | 1 | Dig side: `$00` behind the player, `$FF` in front (Ctrl+D toggles it) | Seen (F11): `$FF` in a new game; the digging side in F10 matched it. |
+| `$08` | 1 | Set by the player's last left or right move: `$FF` left, `$01` right. Fire digs left when this XOR `$1339` is positive, otherwise right. | Seen (F10): `$01` after a step right, and he dug right. |
 
 ### Code addresses
 
-| Address | What |
-| --- | --- |
-| `$611C` | Main loop: move the player, close holes, move guards |
-| `$6152`–`$6161` | The main loop's wait for the interrupt counter, then back to `$611C` |
-| `$6162` | Level complete |
-| `$648A` | Interrupt routine: sound and keyboard only |
+| Address | What | Notes |
+| --- | --- | --- |
+| `$611C` | Main loop: move the player, close holes, move guards | |
+| `$6152`–`$6161` | The main loop's wait for the interrupt counter, then back to `$611C` | Seen (F6, F10): the CPU's PC at `$6152`, `$6155` and `$6158` at the end of many frames. |
+| `$6162` | Level complete | Seen (F2): where the trainer's C= hook jumps; C= completes the level (F4, F10). |
+| `$648A` | Interrupt routine: sound and keyboard only | Seen (M1, F2): the interrupt vector points here from the title screen on. |
+
+The bot's code names the addresses it reads in `RamMap` (`C64Bot.LodeRunner`), with the same meanings.

@@ -35,14 +35,15 @@ Run from the repo root:
 ```powershell
 dotnet build C64Bot                          # build all projects
 dotnet test C64Bot                           # run all tests
-dotnet run --project C64Bot/src/C64Bot.App   # run the app: loads the core and opens its window
+dotnet run --project C64Bot/src/C64Bot.App          # run the app: starts a new game at level 1 and opens its window
+dotnet run --project C64Bot/src/C64Bot.App -- 5     # the same, at level 5 (1-150)
 
 # The VICE program, for exploring (its monitor and debugger). With the binary monitor on (TCP port 6502):
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor                                                         # at the BASIC READY. prompt
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe -binarymonitor -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"      # with Lode Runner version A
 ```
 
-The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`), but not the VICE program. So do the tests in `C64Bot.Libretro.Tests` that run the core: they also need the Lode Runner disk, and are skipped (not failed) on a PC without them. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
+The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`) and the Lode Runner disk, but not the VICE program. So do the tests in `C64Bot.Libretro.Tests` and `C64Bot.LodeRunner.Tests` that run the core; they're skipped (not failed) on a PC without them. In the app's console, T and L save and load a state, R and D compare RAM, and G prints the game state. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
 
 ## Conventions
 
