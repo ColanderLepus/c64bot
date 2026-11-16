@@ -63,6 +63,41 @@ public class GameStateTests
         Assert.Equal("     PH" + new string(' ', 21), lines[9]);
     }
 
+    [Fact]
+    public void ToString_GuardAndRespawningGuard_DrawsGAndLowercaseG()
+    {
+        // Arrange
+        var ram = Ram(column: 0, row: 0);
+        ram[RamMap.GuardCount] = 2;
+        (ram[RamMap.GuardColumns + 1], ram[RamMap.GuardRows + 1]) = (3, 1);
+        (ram[RamMap.GuardColumns + 2], ram[RamMap.GuardRows + 2]) = (7, 1);
+        ram[RamMap.GuardStepsX + 1] = ram[RamMap.GuardStepsY + 1] = ram[RamMap.GuardStepsX + 2] = ram[RamMap.GuardStepsY + 2] = 2;
+        ram[RamMap.GuardTimers + 2] = 0x7F;
+        ram[RamMap.GuardRespawnTimers + 2] = 20;
+        GameState.TryRead(ram, out var state);
+
+        // Act
+        var lines = state!.ToString().Split('\n');
+
+        // Assert
+        Assert.Equal(2, state.Guards.Count);
+        Assert.Equal("   G   g" + new string(' ', 20), lines[1]);
+    }
+
+    [Fact]
+    public void TryRead_GuardValuesNotOfALevel_GivesFalse()
+    {
+        // Arrange
+        var ram = Ram(column: 5, row: 10);
+        ram[RamMap.GuardCount] = 6;
+
+        // Act
+        var read = GameState.TryRead(ram, out _);
+
+        // Assert
+        Assert.False(read);
+    }
+
     // RAM with an empty level and the player centred at the given tile, marked in the grid as played.
     private static byte[] Ram(byte column, byte row)
     {

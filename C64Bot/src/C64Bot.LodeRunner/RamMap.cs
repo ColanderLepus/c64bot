@@ -56,6 +56,40 @@ public static class RamMap
     /// </summary>
     public const int PlayerSprite = 0x07;
 
+    /// <summary>The number of guards in the level, 0–5. Their tables have an entry for each, numbered from 1.</summary>
+    public const int GuardCount = 0x131C;
+
+    /// <summary>The column of guard n is at this address + n, for n from 1 to <see cref="GuardCount"/>.</summary>
+    public const int GuardColumns = 0x1260;
+
+    /// <summary>The row of guard n is at this address + n.</summary>
+    public const int GuardRows = 0x1268;
+
+    /// <summary>
+    /// Guard n's gold or hole timer is at this address + n: 0 when he's free, negative (<c>$80</c>–<c>$FF</c>) while
+    /// he carries gold (counting up; he drops it at 0), positive while he's stuck in a hole (counting down), and
+    /// <c>$7F</c> while he waits to respawn.
+    /// </summary>
+    public const int GuardTimers = 0x1270;
+
+    /// <summary>Where guard n is within his tile, left to right, is at this address + n: 0–4, 2 when centred.</summary>
+    public const int GuardStepsX = 0x1278;
+
+    /// <summary>Where guard n is within his tile, top to bottom, is at this address + n: 0–4, 2 when centred.</summary>
+    public const int GuardStepsY = 0x1280;
+
+    /// <summary>
+    /// Guard n's sprite number is at this address + n: <c>$00</c>–<c>$02</c> run left, <c>$03</c>–<c>$05</c> rope
+    /// left, <c>$06</c> fall left, <c>$07</c>–<c>$0D</c> the same facing right, <c>$0E</c>–<c>$0F</c> ladder.
+    /// </summary>
+    public const int GuardSprites = 0x1288;
+
+    /// <summary>
+    /// Guard n's respawn timer is at this address + n: 0 while he's in play; after he dies it starts at 20 and counts
+    /// down once per pass, and he appears at his respawn place when it reaches 0.
+    /// </summary>
+    public const int GuardRespawnTimers = 0x1298;
+
     /// <summary><c>$00</c> while the player falls, <c>$20</c> when he doesn't, <c>$FF</c> when a level starts.</summary>
     public const int PlayerFalling = 0x1315;
 

@@ -50,7 +50,8 @@ Observations about the game itself, gathered while playing and in the libretro c
 - **The joystick as the C64 sees it** (`$DC00`, read in the libretro core, 2026-11-15): nothing `$7F`, right `$77`, left `$7B`, up `$7E`, fire `$6F`. A pressed direction or fire pulls its bit low: bit 0 up, bit 2 left, bit 3 right, bit 4 fire, and bit 1 down (not measured; the standard C64 layout).
 - **SPACE** starts the game from the demo (see Start-up).
 - **C= skips to the next level** during the game, as the trainer menu says. In our window that's Left Ctrl, which the libretro core maps to C= (tried by the owner, 2026-11-15).
-- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**. Seen in F8: the dig turns him to face the side he digs.
+- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**. Seen in F8: the dig turns him to face the side he digs. From the disassembly (F9): with the default dig mode, fire digs on the side of the player's **last left or right move**, not the way his picture faces; Ctrl+D (dig mode `$1339`) swaps that to the other side.
+- **Guards and holes** (M2 F9, level 1): a guard who falls into a hole scores 75. His hole timer starts at the level's hole time (`$26`, 38 passes, on level 1) and counts down before he climbs out; if the hole closes first, he dies (75 more) and comes back at his respawn place 20 passes later. Seen: a hole dug at the start of level 1 closed on a guard 74 frames after he fell in. A guard in a hole can be walked over.
 - **Moving** (M2 F8): the player moves in steps of a fifth of a tile, both across and up and down; his position within the tile goes from 0 to 4, with 2 centred.
 
 ### Levels
@@ -107,15 +108,15 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
 | `$131C` | 1 | Number of guards (0–5) | Confirmed (F1): 3 in the demo. |
-| `$1260`+n | 1 each | Column of guard n | Confirmed (F1): changing in the demo. |
-| `$1268`+n | 1 each | Row | Confirmed (F1). |
-| `$1270`+n | 1 each | Gold or hole timer. Negative: he carries gold, counts up, and drops it at 0. Positive: he's stuck in a hole, counts down; he shakes below `$0D` and climbs out below `$07`. | Changing in the demo (F1). |
+| `$1260`+n | 1 each | Column of guard n; while he waits to respawn, the column he'll appear in | Confirmed (F1, F9): against the screen. |
+| `$1268`+n | 1 each | Row | Confirmed (F1, F9): against the screen. |
+| `$1270`+n | 1 each | Gold or hole timer. 0: free. Negative: he carries gold, counts up, and drops it at 0. Positive: he's stuck in a hole, counts down from the level's hole time (`$1320`); he shakes below `$0D` and climbs out below `$07`. `$7F` while he waits to respawn. | Confirmed (F9): `$F5` after picking up gold, `$26` on falling into a hole, `$7F` after dying. |
 | `$1278`+n | 1 each | Position within the tile, left to right (0–4, 2 = centred) | Changing (F1). |
 | `$1280`+n | 1 each | Position within the tile, top to bottom (0–4) | Changing (F1). |
-| `$1288`+n | 1 each | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` fall left, `$07`–`$0D` the same facing right, `$0E`–`$0F` ladder | |
+| `$1288`+n | 1 each | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` fall left, `$07`–`$0D` the same facing right, `$0E`–`$0F` ladder (no dig picture, unlike the player's) | |
 | `$1290`+n | 1 each | Facing: `$FF` left, `$01` right | Confirmed (F1): `FF` → `01` as a guard turned. |
-| `$1298`+n | 1 each | Respawn timer: starts at `$14` (20 passes) when a guard dies; he reappears in two steps (at `$13` and `$0A`) and moves again at 0 | |
-| `$131E` | 1 | Respawn column: steps by one each pass, 0–27. A dead guard comes back on row 1 at the first empty tile (in the level as built) from this column on, trying the next rows if a row has none. So respawning isn't random. | Confirmed (F1): one step per pass. Respawn place not seen yet. |
+| `$1298`+n | 1 each | Respawn timer: 0 while he's in play; starts at `$14` (20 passes) when a guard dies; he reappears in two steps (at `$13` and `$0A`) and moves again at 0 | Confirmed (F9): 20 when the hole closed on him; he appeared 33 frames (20 passes) later. |
+| `$131E` | 1 | Respawn column: steps by one each pass, 0–27. A dead guard comes back on row 1 at the first empty tile (in the level as built) from this column on, trying the next rows if a row has none. So respawning isn't random. | Confirmed (F1, F9): one step per pass; a guard who died on level 1 came back at (26,1), an empty tile on row 1. |
 | `$131F` | 1 | The guard being moved (1–5) | |
 | `$15`–`$1B` | 7 | Working copy of the guard being moved: column, row, sprite, facing, gold or hole timer, position within the tile (left to right, top to bottom) | |
 | `$1320` | 1 | How long guards stay in a hole; set when a level starts, from a table indexed by `$1311` (0 in a new game) | |

@@ -169,6 +169,14 @@ static void PrintGameState(ReadOnlySpan<byte> ram)
         (player.Falling ? ", falling" : "") +
         (player.Digging is { } side ? $", digging {side}" : ""));
 
+    foreach (var guard in state.Guards)
+        Console.WriteLine(
+            $"  Guard {guard.Number}: ({guard.Position.Column},{guard.Position.Row}) " +
+            $"offset {guard.OffsetX:+0;-0;0},{guard.OffsetY:+0;-0;0}, {guard.Pose} facing {guard.Facing?.ToString() ?? "-"}" +
+            (guard.CarriesGold ? ", carries gold" : "") +
+            (guard.InHole ? ", in a hole" : "") +
+            (guard.Respawning ? ", waiting to respawn" : ""));
+
     var ladders = state.Level.HiddenLadders;
     Console.WriteLine("  Hidden exit ladders: " +
         (ladders.Count == 0 ? "none" : string.Join(" ", ladders.Select(p => $"({p.Column},{p.Row})"))));
