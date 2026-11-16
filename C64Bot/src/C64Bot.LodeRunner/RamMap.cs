@@ -33,6 +33,35 @@ public static class RamMap
 
     public const int HiddenLadderCount = 0x1301;
 
+    /// <summary>The player's column, 0–27.</summary>
+    public const int PlayerColumn = 0x03;
+
+    /// <summary>The player's row, 0–15.</summary>
+    public const int PlayerRow = 0x04;
+
+    /// <summary>
+    /// Where the player is within his tile, left to right: 0–4, 2 when he's centred on it.
+    /// </summary>
+    public const int PlayerStepX = 0x05;
+
+    /// <summary>
+    /// Where the player is within his tile, top to bottom: 0–4, 2 when he's centred on it.
+    /// </summary>
+    public const int PlayerStepY = 0x06;
+
+    /// <summary>
+    /// The player's sprite number, which shows his pose and facing: <c>$00</c>–<c>$02</c> run left, <c>$03</c>–<c>$05</c>
+    /// rope left, <c>$06</c> dig left, <c>$07</c> fall left, <c>$08</c>–<c>$0F</c> the same facing right,
+    /// <c>$10</c>–<c>$11</c> ladder.
+    /// </summary>
+    public const int PlayerSprite = 0x07;
+
+    /// <summary><c>$00</c> while the player falls, <c>$20</c> when he doesn't, <c>$FF</c> when a level starts.</summary>
+    public const int PlayerFalling = 0x1315;
+
+    /// <summary><c>$00</c> when the player isn't digging, <c>$01</c> while he digs to his right, <c>$FF</c> to his left.</summary>
+    public const int PlayerDigging = 0x1316;
+
     /// <summary>
     /// The C64's interrupt vector (2 bytes, low byte first): the routine run on every interrupt. It points to
     /// <see cref="GameInterruptRoutine"/> once the game runs.

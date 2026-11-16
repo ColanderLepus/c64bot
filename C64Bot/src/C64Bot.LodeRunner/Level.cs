@@ -66,10 +66,14 @@ public sealed class Level
     }
 
     /// <summary>
-    /// Draws the level as text, one line per row and one character per tile: a space for empty, <c>#</c> brick,
-    /// <c>@</c> solid, <c>H</c> ladder, <c>-</c> rope, <c>T</c> trap brick, <c>$</c> gold, and <c>?</c> for anything
-    /// else.
+    /// Draws the level's layout as text, one line per row and one character per tile: a space for empty, <c>#</c>
+    /// brick, <c>@</c> solid, <c>H</c> ladder, <c>-</c> rope, <c>T</c> trap brick, <c>$</c> gold, and <c>?</c> for
+    /// anything else.
     /// </summary>
+    /// <remarks>
+    /// The layout only: no player, guards or holes (a dug brick is still drawn as a brick). For the level as it is
+    /// on screen, see <see cref="GameState.ToString"/>.
+    /// </remarks>
     public override string ToString()
     {
         var text = new StringBuilder();

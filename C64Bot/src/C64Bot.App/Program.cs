@@ -72,7 +72,7 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
     Console.WriteLine("The level starts by itself. After a death, hold a direction until it runs again.");
     Console.WriteLine("In this console window: T saves a state, L loads it.");
-    Console.WriteLine("R remembers the RAM, D shows what has changed since then. G shows the level.");
+    Console.WriteLine("R remembers the RAM, D shows what has changed since then. G shows the game state.");
 
     byte[]? savedState = null;
     var savedAt = 0;
@@ -116,8 +116,8 @@ using (var clock = new FrameClock(core.FramesPerSecond))
             }
             else if (key == ConsoleKey.G)
             {
-                Console.WriteLine($"Frame {frame}: the level (M2 F7):");
-                PrintLevel(core.SystemRam);
+                Console.WriteLine($"Frame {frame}: the game state (M2 F8):");
+                PrintGameState(core.SystemRam);
             }
         }
 
@@ -146,31 +146,32 @@ using (var clock = new FrameClock(core.FramesPerSecond))
 
 windowThread.Join();
 
-// The level as built, framed so its edges show; then the hidden exit ladders, and the tiles where the level as
-// played differs from it (the player, the guards and the holes).
-static void PrintLevel(ReadOnlySpan<byte> ram)
+// The game state as the bot would see it, framed so the level's edges show; then the player's values and the
+// hidden exit ladders.
+static void PrintGameState(ReadOnlySpan<byte> ram)
 {
-    var level = Level.Read(ram);
+    if (!GameState.TryRead(ram, out var state))
+    {
+        Console.WriteLine("  Not readable in this frame (no level in play, or the player's move caught halfway).");
+        return;
+    }
+
     var border = "  +" + new string('-', Level.Width) + "+";
     Console.WriteLine(border);
-    foreach (var line in level.ToString().TrimEnd('\n').Split('\n'))
+    foreach (var line in state.ToString().TrimEnd('\n').Split('\n'))
         Console.WriteLine($"  |{line}|");
     Console.WriteLine(border);
 
+    var player = state.Player;
+    Console.WriteLine(
+        $"  Player: ({player.Position.Column},{player.Position.Row}) offset {player.OffsetX:+0;-0;0},{player.OffsetY:+0;-0;0}, " +
+        $"{player.Pose} facing {player.Facing?.ToString() ?? "-"}" +
+        (player.Falling ? ", falling" : "") +
+        (player.Digging is { } side ? $", digging {side}" : ""));
+
+    var ladders = state.Level.HiddenLadders;
     Console.WriteLine("  Hidden exit ladders: " +
-        (level.HiddenLadders.Count == 0 ? "none" : string.Join(" ", level.HiddenLadders.Select(p => $"({p.Column},{p.Row})"))));
-
-    var differences = new List<string>();
-    for (var row = 0; row < Level.Height; row++)
-        for (var column = 0; column < Level.Width; column++)
-        {
-            var built = ram[RamMap.TileAddress(RamMap.LevelAsBuilt, column, row)];
-            var played = ram[RamMap.TileAddress(RamMap.LevelAsPlayed, column, row)];
-            if (built != played)
-                differences.Add($"({column},{row}) built {built} played {played}");
-        }
-
-    Console.WriteLine("  As played differs at: " + (differences.Count == 0 ? "none" : string.Join(", ", differences)));
+        (ladders.Count == 0 ? "none" : string.Join(" ", ladders.Select(p => $"({p.Column},{p.Row})"))));
 }
 
 // One line per 256-byte page that changed. A game redraws its screens all the time, which would bury the

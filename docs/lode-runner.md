@@ -50,7 +50,8 @@ Observations about the game itself, gathered while playing and in the libretro c
 - **The joystick as the C64 sees it** (`$DC00`, read in the libretro core, 2026-11-15): nothing `$7F`, right `$77`, left `$7B`, up `$7E`, fire `$6F`. A pressed direction or fire pulls its bit low: bit 0 up, bit 2 left, bit 3 right, bit 4 fire, and bit 1 down (not measured; the standard C64 layout).
 - **SPACE** starts the game from the demo (see Start-up).
 - **C= skips to the next level** during the game, as the trainer menu says. In our window that's Left Ctrl, which the libretro core maps to C= (tried by the owner, 2026-11-15).
-- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**.
+- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**. Seen in F8: the dig turns him to face the side he digs.
+- **Moving** (M2 F8): the player moves in steps of a fifth of a tile, both across and up and down; his position within the tile goes from 0 to 4, with 2 centred.
 
 ### Levels
 
@@ -71,7 +72,7 @@ RAM is read after every frame, and most frames end halfway through a pass of the
 
 - **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. It includes the gold still lying around and, once all gold is taken, the exit ladders. Holes aren't in it: they come from the hole tables (F10).
 - **The guards:** their tables (`$1260`–`$129F`), not the grid's guard tiles or the zero-page copy (`$15`–`$1B`). The game writes a guard's table entry in one go after his move, so every entry is complete; the guard being moved is one move (at most 33 ms) behind.
-- **The player:** `$03`–`$07`. About 1 frame in 3,000 catches his move halfway; then the grid as played has no player tile at his column and row, and the frame is skipped.
+- **The player:** `$03`–`$07`. About 1 frame in 3,000 to 10,000 catches his move halfway; then the grid as played has no player tile at his column and row, or his step is out of range (`$FF` for a moment), and the frame is skipped (`GameState.TryRead` gives false).
 
 ## RAM map
 
@@ -90,14 +91,14 @@ Tile codes: 0 empty, 1 brick (diggable), 2 solid block, 3 ladder, 4 rope, 5 trap
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| `$03` | 1 | Column | |
-| `$04` | 1 | Row. The level is complete when this is 0, `$06` is 2 and no gold is left. | |
-| `$05` | 1 | Position within the tile, left to right: 0–4, 2 = centred | |
-| `$06` | 1 | Position within the tile, top to bottom: 0–4, 2 = centred | |
-| `$07` | 1 | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` dig left, `$07` fall left, `$08`–`$0F` the same facing right, `$10`–`$11` ladder | |
+| `$03` | 1 | Column | Confirmed (F8): against the screen. |
+| `$04` | 1 | Row. The level is complete when this is 0, `$06` is 2 and no gold is left. | Confirmed (F8): against the screen. |
+| `$05` | 1 | Position within the tile, left to right: 0–4, 2 = centred. Each step of a move changes it by 1; at 4 the column goes up and it starts again at 0 (and the other way round). | Confirmed (F8): walking right went 2, 3, 4, then the next column at 0. For a moment it can be `$FF` while the game moves on to the next tile. |
+| `$06` | 1 | Position within the tile, top to bottom: 0–4, 2 = centred, stepping like `$05` | Confirmed (F8): climbing went 2, 1, 0, then the row above at 4. |
+| `$07` | 1 | Sprite: `$00`–`$02` run left, `$03`–`$05` rope left, `$06` dig left, `$07` fall left, `$08`–`$0F` the same facing right, `$10`–`$11` ladder. It's the picture shown, not the movement: it stays until the next move. | Confirmed (F8): ladder, rope left, fall left, dig left, run right, each against the screen. |
 | `$1314` | 1 | Alive: 1 alive, 0 dead (caught, trapped in a hole, or the demo ended) | Confirmed (F4): 0 from each death until the level is set up again, and from the end of the demo until the new game's level is set up. |
-| `$1315` | 1 | Falling: `$00` falling, `$20` not, `$FF` at the start | |
-| `$1316` | 1 | Digging: `$00` no, `$01` right, `$FF` left | |
+| `$1315` | 1 | Falling: `$00` falling, `$20` not, `$FF` at the start | Confirmed (F8): `$00` while dropping from a rope, not after landing. |
+| `$1316` | 1 | Digging: `$00` no, `$01` right, `$FF` left | Confirmed (F8): `$FF` while digging to the left. |
 
 ### Guards
 
