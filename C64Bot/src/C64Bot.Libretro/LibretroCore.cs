@@ -134,21 +134,6 @@ public sealed unsafe partial class LibretroCore : IDisposable
     public double SampleRate { get; private set; }
 
     /// <summary>
-    /// The number of pictures the core has finished, usually one per frame.
-    /// </summary>
-    public int VideoFrames { get; private set; }
-
-    /// <summary>
-    /// The width of the last picture the core finished, in pixels.
-    /// </summary>
-    public int FrameWidth { get; private set; }
-
-    /// <summary>
-    /// The height of the last picture the core finished, in pixels.
-    /// </summary>
-    public int FrameHeight { get; private set; }
-
-    /// <summary>
     /// The emulated machine's RAM, read straight from the core's memory. For the VICE core: the C64's 64 KB.
     /// </summary>
     /// <remarks>

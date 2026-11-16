@@ -7,25 +7,6 @@ using C64Bot.LodeRunner;
 const string CorePath = @"C:\Tools\C64\libretro\vice_x64sc_libretro.dll";
 const string DiskPath = @"C:\Emulation\ROMs\C64\Lode Runner.d64";
 
-var coreDirectory = Path.GetDirectoryName(CorePath)!;
-var systemDirectory = Directory.CreateDirectory(Path.Combine(coreDirectory, "system")).FullName;
-var saveDirectory = Directory.CreateDirectory(Path.Combine(coreDirectory, "saves")).FullName;
-
-using var core = LibretroCore.Load(CorePath);
-
-// The core's log lines are only format strings without their values (see OnLog), so leave them out.
-core.Log = message =>
-{
-    if (!message.StartsWith("Core log", StringComparison.Ordinal))
-        Console.WriteLine(message);
-};
-
-core.Initialize(systemDirectory, saveDirectory, new Dictionary<string, string>
-{
-    ["vice_gfx_colors"] = "24bit", // the pictures come in the format WPF shows directly
-    ["vice_joyport"] = "2",        // the first RetroPad is the joystick in port 2, which Lode Runner reads
-});
-
 // The level to start at can be given on the command line; level 1 if not.
 var level = 1;
 if (args.Length > 0 && (!int.TryParse(args[0], out level) || level is < 1 or > GameStarter.MaxLevel))
@@ -34,20 +15,28 @@ if (args.Length > 0 && (!int.TryParse(args[0], out level) || level is < 1 or > G
     return;
 }
 
-core.LoadGame(DiskPath);
-Console.WriteLine($"Lode Runner loaded: {core.FramesPerSecond:F3} frames a second.");
+// The core keeps its own files next to its DLL. Its log lines are only format strings without their values (see
+// LibretroCore's OnLog), so they're left out.
+using var core = LodeRunnerCore.Load(CorePath, DiskPath, Path.GetDirectoryName(CorePath)!, message =>
+{
+    if (!message.StartsWith("Core log", StringComparison.Ordinal))
+        Console.WriteLine(message);
+});
 
-// M2 F5: flat out to the start of a new game (unlimited lives yes, invincibility no, D6), then a new game at the
-// chosen level.
+var info = core.GetSystemInfo();
+Console.WriteLine(
+    $"Lode Runner loaded in {info.LibraryName} {info.LibraryVersion}: {core.FramesPerSecond:F3} frames a second.");
+
+// Flat out to the start of a new game (unlimited lives yes, invincibility no, D6), then a new game at the chosen
+// level.
 var startTime = System.Diagnostics.Stopwatch.StartNew();
 var starter = GameStarter.Start(core, unlimitedLives: true);
 Console.WriteLine($"At the start of a new game after {starter.StartFrames:N0} frames, {startTime.Elapsed.TotalSeconds:F1} s.");
 starter.StartLevel(level);
 Console.WriteLine($"Starting level {level}.");
 
-// T6: watch it. The window runs on a thread of its own: WPF needs a single-threaded apartment (STA)
-// thread, and this way the emulation loop below never waits for the window.
-// T10: the window's keys come back the other way, through a queue.
+// The window runs on a thread of its own: WPF needs a single-threaded apartment (STA) thread, and this way the
+// emulation loop below never waits for the window. The window's keys come back the other way, through a queue.
 var frames = new FrameBuffer();
 core.VideoFrame = frames.Store;
 var input = new InputQueue();
@@ -68,7 +57,7 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     // The game sets up the level, then waits for the first move: hold a direction until the level runs (also after
     // a death). The window's keyboard goes to the game (see KeyMap). The keys in this console window are for the app
     // itself: T saves a state in memory and L loads it, so the game jumps back to that moment. R remembers the RAM
-    // and D shows what has changed since then (M2 F1).
+    // and D shows what has changed since then. G shows the game state as the bot reads it.
     Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
     Console.WriteLine("The level waits for your first move: hold a direction until it runs (also after a death).");
     Console.WriteLine("In this console window: T saves a state, L loads it.");
@@ -79,8 +68,8 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     RamImage? rememberedRam = null;
     var rememberedAt = 0;
 
-    // M2 F4: say when the game's phase changes, with the bytes the phase is read from, and when the level number
-    // changes (it goes up as soon as a level is completed).
+    // Say when the game's phase changes, with the bytes the phase is read from, and when the level number changes
+    // (it goes up as soon as a level is completed).
     var phaseReader = new GamePhaseReader();
     GamePhase? phase = null;
     int? shownLevel = null;
@@ -116,7 +105,7 @@ using (var clock = new FrameClock(core.FramesPerSecond))
             }
             else if (key == ConsoleKey.G)
             {
-                Console.WriteLine($"Frame {frame}: the game state (M2 F8):");
+                Console.WriteLine($"Frame {frame}: the game state:");
                 PrintGameState(core.SystemRam);
             }
         }
@@ -131,7 +120,7 @@ using (var clock = new FrameClock(core.FramesPerSecond))
             var ram = core.SystemRam;
             Console.WriteLine(
                 $"Frame {frame}: {phase} (" +
-                $"game mode ${ram[RamMap.GameMode]:X2}, alive ${ram[RamMap.Alive]:X2}, " +
+                $"game mode ${ram[RamMap.GameMode]:X2}, alive ${ram[RamMap.PlayerAlive]:X2}, " +
                 $"gold left ${ram[RamMap.GoldLeft]:X2}, lives ${ram[RamMap.Lives]:X2}, " +
                 $"interrupt counter ${ram[RamMap.InterruptCounter]:X2})");
         }

@@ -30,11 +30,12 @@ public sealed record Guard(
     /// <summary>The most guards a level has.</summary>
     public const int MaxCount = 5;
 
-    private const int CentreStep = 2;
-    private const int MaxStep = 4;
-    private const int FirstRightSprite = 0x07;
-    private const int FirstLadderSprite = 0x0E;
-    private const int LastLadderSprite = 0x0F;
+    private const int LadderSprites = 2;
+
+    // His sprites: these facing left, then the same facing right, then two on a ladder (see RamMap.GuardSprites).
+    // Unlike the player, a guard has no picture for digging.
+    private static readonly Pose[] PosesFacingLeft =
+        [Pose.Run, Pose.Run, Pose.Run, Pose.Rope, Pose.Rope, Pose.Rope, Pose.Fall];
 
     /// <summary>
     /// Reads all guards from the C64's RAM, or gives null if the values aren't those of guards in a level, as
@@ -62,20 +63,14 @@ public sealed record Guard(
 
     private static Guard? Read(ReadOnlySpan<byte> ram, int n)
     {
-        int column = ram[RamMap.GuardColumns + n], row = ram[RamMap.GuardRows + n];
-        int stepX = ram[RamMap.GuardStepsX + n], stepY = ram[RamMap.GuardStepsY + n];
-        int sprite = ram[RamMap.GuardSprites + n];
-        if (column >= Level.Width || row >= Level.Height || stepX > MaxStep || stepY > MaxStep || sprite > LastLadderSprite)
+        if (Figure.ReadSprite(ram[RamMap.GuardSprites + n], PosesFacingLeft, LadderSprites) is not { } sprite
+            || !Figure.TryReadPlace(
+                ram[RamMap.GuardColumns + n], ram[RamMap.GuardRows + n],
+                ram[RamMap.GuardStepsX + n], ram[RamMap.GuardStepsY + n],
+                out var position, out var offsetX, out var offsetY))
+        {
             return null;
-
-        var (pose, facing) = sprite >= FirstLadderSprite
-            ? (Pose.Ladder, (Direction?)null)
-            : ((sprite % FirstRightSprite) switch
-            {
-                <= 2 => Pose.Run,
-                <= 5 => Pose.Rope,
-                _ => Pose.Fall,
-            }, sprite < FirstRightSprite ? Direction.Left : Direction.Right);
+        }
 
         // The timer is negative while he carries gold and positive while he's in a hole; while he waits to respawn
         // it's positive too, so the respawn timer tells that apart.
@@ -84,11 +79,11 @@ public sealed record Guard(
 
         return new Guard(
             n,
-            new TilePosition(column, row),
-            stepX - CentreStep,
-            stepY - CentreStep,
-            pose,
-            facing,
+            position,
+            offsetX,
+            offsetY,
+            sprite.Pose,
+            sprite.Facing,
             CarriesGold: timer < 0,
             InHole: timer > 0 && !respawning,
             Respawning: respawning);

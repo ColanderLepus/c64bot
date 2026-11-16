@@ -145,10 +145,6 @@ public sealed unsafe partial class LibretroCore
 
     private void HandleVideoRefresh(void* data, uint width, uint height, nuint pitch)
     {
-        VideoFrames++;
-        FrameWidth = (int)width;
-        FrameHeight = (int)height;
-
         // data is null when the picture is the same as the last one.
         if (data == null || VideoFrame is not { } handler)
             return;

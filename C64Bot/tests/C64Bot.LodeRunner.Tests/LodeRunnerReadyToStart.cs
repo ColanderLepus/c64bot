@@ -16,13 +16,8 @@ public sealed class LodeRunnerReadyToStart : IDisposable
         if (!CoreFiles.Exist)
             return;
 
-        var directory = Path.Combine(Path.GetTempPath(), "C64Bot.LodeRunner.Tests");
-        _core = LibretroCore.Load(CoreFiles.CorePath);
-        _core.Initialize(
-            Directory.CreateDirectory(Path.Combine(directory, "system")).FullName,
-            Directory.CreateDirectory(Path.Combine(directory, "saves")).FullName,
-            new Dictionary<string, string> { ["vice_gfx_colors"] = "24bit", ["vice_joyport"] = "2" });
-        _core.LoadGame(CoreFiles.DiskPath);
+        _core = LodeRunnerCore.Load(
+            CoreFiles.CorePath, CoreFiles.DiskPath, Path.Combine(Path.GetTempPath(), "C64Bot.LodeRunner.Tests"));
         _starter = GameStarter.Start(_core, unlimitedLives: true);
     }
 

@@ -1,10 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <!-- It drives the core through C64Bot.Libretro, which only runs on Windows. -->
-    <TargetFramework>net10.0-windows</TargetFramework>
-  </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\C64Bot.Libretro\C64Bot.Libretro.csproj" />
   </ItemGroup>

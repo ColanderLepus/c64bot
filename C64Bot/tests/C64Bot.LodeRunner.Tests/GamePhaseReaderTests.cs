@@ -252,7 +252,7 @@ public class GamePhaseReaderTests
         ram[RamMap.InterruptVector] = RamMap.GameInterruptRoutine & 0xFF;
         ram[RamMap.InterruptVector + 1] = RamMap.GameInterruptRoutine >> 8;
         ram[RamMap.GameMode] = gameMode;
-        ram[RamMap.Alive] = alive;
+        ram[RamMap.PlayerAlive] = alive;
         ram[RamMap.GoldLeft] = goldLeft;
         ram[RamMap.Lives] = lives;
         ram[RamMap.InterruptCounter] = counter;

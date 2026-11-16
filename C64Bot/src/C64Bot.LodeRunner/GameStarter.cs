@@ -98,7 +98,7 @@ public sealed class GameStarter
             core.ReleaseButton(RetroPadButton.B);
         RunFrames(2);
 
-        if (core.SystemRam[RamMap.Alive] != 0)
+        if (core.SystemRam[RamMap.PlayerAlive] != 0)
             throw new InvalidOperationException("The new game was seen too late: its level is already being loaded.");
 
         return new GameStarter(core, core.SaveState(), frames);

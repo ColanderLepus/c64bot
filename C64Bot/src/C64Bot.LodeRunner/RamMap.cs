@@ -9,6 +9,8 @@ namespace C64Bot.LodeRunner;
 /// </remarks>
 public static class RamMap
 {
+    // The level.
+
     /// <summary>
     /// The level as played: one byte per tile (see <see cref="TileAddress"/>), with holes, the player and the guards
     /// in it. Its player and guard tiles can be halfway through a move (D14).
@@ -33,6 +35,8 @@ public static class RamMap
 
     public const int HiddenLadderCount = 0x1301;
 
+    // The player.
+
     /// <summary>The player's column, 0–27.</summary>
     public const int PlayerColumn = 0x03;
 
@@ -55,6 +59,19 @@ public static class RamMap
     /// <c>$10</c>–<c>$11</c> ladder.
     /// </summary>
     public const int PlayerSprite = 0x07;
+
+    /// <summary>
+    /// 1 while the player is alive, 0 once he has died (caught, trapped in a hole, or the demo was ended).
+    /// </summary>
+    public const int PlayerAlive = 0x1314;
+
+    /// <summary><c>$00</c> while the player falls, <c>$20</c> when he doesn't, <c>$FF</c> when a level starts.</summary>
+    public const int PlayerFalling = 0x1315;
+
+    /// <summary><c>$00</c> when the player isn't digging, <c>$01</c> while he digs to his right, <c>$FF</c> to his left.</summary>
+    public const int PlayerDigging = 0x1316;
+
+    // The guards.
 
     /// <summary>The number of guards in the level, 0–5. Their tables have an entry for each, numbered from 1.</summary>
     public const int GuardCount = 0x131C;
@@ -90,6 +107,8 @@ public static class RamMap
     /// </summary>
     public const int GuardRespawnTimers = 0x1298;
 
+    // The holes.
+
     /// <summary>
     /// The column of the hole in slot i is at this address + i, for slots 0 to <see cref="Hole.MaxCount"/> − 1. Only
     /// slots whose timer (<see cref="HoleTimers"/>) isn't 0 hold a hole.
@@ -105,27 +124,13 @@ public static class RamMap
     /// </summary>
     public const int HoleTimers = 0x12E0;
 
-    /// <summary>
-    /// The score, 4 bytes of BCD (two decimal digits per byte), lowest byte first.
-    /// </summary>
-    public const int Score = 0x130A;
-
-    /// <summary><c>$00</c> while the player falls, <c>$20</c> when he doesn't, <c>$FF</c> when a level starts.</summary>
-    public const int PlayerFalling = 0x1315;
-
-    /// <summary><c>$00</c> when the player isn't digging, <c>$01</c> while he digs to his right, <c>$FF</c> to his left.</summary>
-    public const int PlayerDigging = 0x1316;
+    // The game.
 
     /// <summary>
-    /// The C64's interrupt vector (2 bytes, low byte first): the routine run on every interrupt. It points to
-    /// <see cref="GameInterruptRoutine"/> once the game runs.
+    /// The game's own mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list
+    /// show), 3 play from the level editor, 5 level editor.
     /// </summary>
-    public const int InterruptVector = 0x0314;
-
-    /// <summary>
-    /// Lode Runner's interrupt routine, which plays sound and reads the keyboard.
-    /// </summary>
-    public const int GameInterruptRoutine = 0x648A;
+    public const int GameMode = 0x1306;
 
     /// <summary>
     /// The level number, 1–150. It goes up as soon as a level is completed (or skipped), before the next one is
@@ -139,23 +144,30 @@ public static class RamMap
     /// </summary>
     public const int LevelNumberOnDisk = 0x1310;
 
-    /// <summary>
-    /// The game's own mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list
-    /// show), 3 play from the level editor, 5 level editor.
-    /// </summary>
-    public const int GameMode = 0x1306;
+    public const int Lives = 0x1312;
 
     /// <summary>
-    /// 1 while the player is alive, 0 once he has died (caught, trapped in a hole, or the demo was ended).
+    /// The score, 4 bytes of BCD (two decimal digits per byte), lowest byte first.
     /// </summary>
-    public const int Alive = 0x1314;
+    public const int Score = 0x130A;
 
     /// <summary>
     /// The gold still to be taken in the level; 0, or <c>$FF</c>, once it's all taken.
     /// </summary>
     public const int GoldLeft = 0x130E;
 
-    public const int Lives = 0x1312;
+    // The game running.
+
+    /// <summary>
+    /// The C64's interrupt vector (2 bytes, low byte first): the routine run on every interrupt. It points to
+    /// <see cref="GameInterruptRoutine"/> once the game runs.
+    /// </summary>
+    public const int InterruptVector = 0x0314;
+
+    /// <summary>
+    /// Lode Runner's interrupt routine, which plays sound and reads the keyboard.
+    /// </summary>
+    public const int GameInterruptRoutine = 0x648A;
 
     /// <summary>
     /// Counted up by every interrupt (60 a second) and set back to 3 by each pass of the game's main loop, which

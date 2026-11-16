@@ -84,7 +84,7 @@ public sealed class GamePhaseReader
 
     private GamePhase ReadPlayPhase(ReadOnlySpan<byte> ram, bool mainLoopRunning)
     {
-        if (ram[RamMap.Alive] != 0)
+        if (ram[RamMap.PlayerAlive] != 0)
             return mainLoopRunning ? GamePhase.Playing : GamePhase.LevelStarting;
 
         if (ram[RamMap.Lives] == 0)

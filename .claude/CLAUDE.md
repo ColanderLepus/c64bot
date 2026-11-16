@@ -27,6 +27,7 @@ Don't change the plan's direction (milestone order, architecture, decisions) wit
 - One step at a time, checking each step before starting the next.
 - Claude implements the changes, but first shows the owner what it plans to change (the code, or a clear description of it) and waits for the go-ahead.
 - After a step: check it (build, tests, a run), update the plan documents, and write a commit message when the owner asks. Commit only when told to.
+- Claude runs the checks itself: headless, driving the core from a script, with the core's pictures saved as PNG files and looked at where the screen matters. The owner is asked only for what needs a person watching in real time (the window's smoothness, its keyboard, how playing feels), and a plan says when that's the case.
 
 ## Commands
 

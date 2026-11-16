@@ -9,7 +9,7 @@ namespace C64Bot.App;
 /// </summary>
 /// <remarks>
 /// The joystick keys go only to the joystick, so they can't clash with the core's own key map. The core decides
-/// which C64 key each PC key is; for example, Left Ctrl is probably the C= key. The punctuation keys are named
+/// which C64 key each PC key is; for example, Left Ctrl is the C= key. The punctuation keys are named
 /// after their places on a US keyboard, so on other layouts some may give a different character.
 /// </remarks>
 public static class KeyMap
