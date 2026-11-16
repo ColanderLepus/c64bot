@@ -50,7 +50,8 @@ Observations about the game itself, gathered while playing and in the libretro c
 - **The joystick as the C64 sees it** (`$DC00`, read in the libretro core, 2026-11-15): nothing `$7F`, right `$77`, left `$7B`, up `$7E`, fire `$6F`. A pressed direction or fire pulls its bit low: bit 0 up, bit 2 left, bit 3 right, bit 4 fire, and bit 1 down (not measured; the standard C64 layout).
 - **SPACE** starts the game from the demo (see Start-up).
 - **C= skips to the next level** during the game, as the trainer menu says. In our window that's Left Ctrl, which the libretro core maps to C= (tried by the owner, 2026-11-15).
-- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**. Seen in F8: the dig turns him to face the side he digs. From the disassembly (F9): with the default dig mode, fire digs on the side of the player's **last left or right move**, not the way his picture faces; Ctrl+D (dig mode `$1339`) swaps that to the other side.
+- **Digging** (M2 F7–F10): **fire** digs the brick diagonally below the player, on the side of his **last left or right move**, not the way his picture faces. Fire takes priority over the joystick's directions in the same pass, so to dig on the other side, first make a step that way, then fire. Ctrl+D swaps the side (dig mode `$1339`); we leave it alone. The dig turns him to face the side he digs, takes about 20 frames, and only then becomes a hole. Digging works while running too (owner, 2026-11-15). Seen: no move yet at the start of level 1 → left; after a step right → right.
+- **After a death** (M2 F10): the level starts over with all its gold back; the score stays.
 - **Guards and holes** (M2 F9, level 1): a guard who falls into a hole scores 75. His hole timer starts at the level's hole time (`$26`, 38 passes, on level 1) and counts down before he climbs out; if the hole closes first, he dies (75 more) and comes back at his respawn place 20 passes later. Seen: a hole dug at the start of level 1 closed on a guard 74 frames after he fell in. A guard in a hole can be walked over.
 - **Moving** (M2 F8): the player moves in steps of a fifth of a tile, both across and up and down; his position within the tile goes from 0 to 4, with 2 centred.
 
@@ -71,7 +72,7 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 RAM is read after every frame, and most frames end halfway through a pass of the game's main loop (M2 F6). So each thing is read from where it's always complete (D14):
 
-- **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. It includes the gold still lying around and, once all gold is taken, the exit ladders. Holes aren't in it: they come from the hole tables (F10).
+- **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. It includes the gold still lying around and, once all gold is taken, the exit ladders. Holes aren't in it: they come from the hole tables (`$12A0`–`$12FF`), whose entries are written in one go when a dig finishes.
 - **The guards:** their tables (`$1260`–`$129F`), not the grid's guard tiles or the zero-page copy (`$15`–`$1B`). The game writes a guard's table entry in one go after his move, so every entry is complete; the guard being moved is one move (at most 33 ms) behind.
 - **The player:** `$03`–`$07`. About 1 frame in 3,000 to 10,000 catches his move halfway; then the grid as played has no player tile at his column and row, or his step is out of range (`$FF` for a moment), and the frame is skipped (`GameState.TryRead` gives false).
 
@@ -125,9 +126,9 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| `$12A0`+i | 31 | Column of hole i (0–30) | |
-| `$12C0`+i | 31 | Row of hole i | |
-| `$12E0`+i | 31 | Open time of hole i, 0 = no hole. Starts at `$B4` (180 passes, about 6 s) and counts down once per pass; the hole fills in stages at `$14` and `$0A`. | Changing (F1): `8F` → `70` in 50 frames, 31 passes. |
+| `$12A0`+i | 30 | Column of the hole in slot i (0–29); only meaningful while its timer isn't 0 | Confirmed (F10): (13,15) and (15,15) as dug. |
+| `$12C0`+i | 30 | Row of the hole in slot i | Confirmed (F10). |
+| `$12E0`+i | 30 | Timer of the hole in slot i, 0 = free slot. Set to `$B4` (180) when a dig finishes, together with the empty tile in the level as played; one less each pass. The picture shows the hole filling in at `$14` and `$0A`, but the tile stays empty until 0, when the brick comes back and anyone inside dies. A dig needs a free slot among the first 30. | Confirmed (F1, F10): `8F` → `70` in 50 frames; a hole lasted 299 frames (179 passes) from appearing to closing, and the brick came back in the level as played. |
 | `$1301` | 1 | Number of hidden exit ladders, at most 45 | Confirmed (F7): 0–45 over the 150 levels, 4 on level 1. |
 | `$1201`+n, `$1231`+n | 1 each | Column and row of hidden exit ladder n (from 1) | Confirmed (F7): level 1's are column 18, rows 0–3; on every level they're on empty tiles. |
 
@@ -135,12 +136,12 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| `$1305` | 1 | Level number, 1–150. Goes up at the start of the game's "level complete", before the score is counted up, and with a level skip. | Confirmed (F2): 1 in level 1. |
+| `$1305` | 1 | Level number, 1–150. Goes up at the start of the game's "level complete", before the score is counted up, and with a level skip. | Confirmed (F2, F5, F10): 1 in level 1, picked with `GameStarter`, 2 at once after C=. |
 | `$1306` | 1 | Game mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list show), 3 play from the level editor, 5 level editor | Confirmed (F1, F2, F4): 0 on the title screen, 1 in the demo, 2 from SPACE until the title screen comes back after game over. Leftovers before the game runs (3 was seen during loading). |
-| `$130A`–`$130D` | 4 | Score, BCD (two digits per byte), lowest byte first | Confirmed (F1): 250 after a gold. |
-| `$130E` | 1 | Gold left in the level | Confirmed (F1): one less after a gold. |
+| `$130A`–`$130D` | 4 | Score, BCD (two digits per byte), lowest byte first | Confirmed (F1, F9, F10): 250 after a gold, 75 for a guard in a hole and 75 more when it closes on him, 1,500 for a level, counted up 100 at a time. |
+| `$130E` | 1 | Gold left in the level, including gold carried by guards; `$FF` once the exit ladders have been shown | Confirmed (F1, F7, F10): one less after a gold; back to the level's full count after a death; `$FF` after the exit ladders appeared. |
 | `$1310` | 1 | Level number as stored on disk, 0–149. When a level starts, the game loads this one from disk (unless it's the one already loaded). | Confirmed (F5): written before a new game loads its level, it picks the level. |
-| `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2, F4): 5 in level 1, one less per death with N to unlimited lives, 0 at the last death. |
+| `$1312` | 1 | Lives; 5 at the start, one more per level completed | Confirmed (F2, F4, F10): 5 in level 1, one less per death with N to unlimited lives, 0 at the last death, one more at once on C=. |
 | `$1318` | 1 | Cheated (no high score): `$00` yes, `$01` no | |
 | `$1319` | 1 | Joystick up/down as the game read it: `$00` none, `$21` up, `$25` down; `$1E` and `$26` when digging left and right | |
 | `$131A` | 1 | Joystick left/right: `$00` none, `$22` left, `$2A` right; `$1E` and `$26` when digging | Confirmed (F1): `22` → `2A` as the demo turned right. |

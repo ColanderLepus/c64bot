@@ -27,13 +27,21 @@ public sealed class GamePhaseReader
     private GamePhase _phase = GamePhase.Other;
 
     /// <summary>
+    /// The phase found by the last <see cref="Update"/>, <see cref="GamePhase.Other"/> before the first. Reading it
+    /// doesn't count a frame.
+    /// </summary>
+    public GamePhase Phase => _phase;
+
+    /// <summary>
     /// Whether the game's main loop was running at the last <see cref="Update"/>: the player and the guards move,
     /// in a real game or in the demo.
     /// </summary>
     public bool MainLoopRunning { get; private set; }
 
     /// <summary>
-    /// Reads the phase from the RAM as it is after a frame.
+    /// Reads the phase from the RAM as it is after a frame. Call it exactly once per frame: each call counts as a
+    /// frame, so a second call for the same frame looks like a frame without a pass of the main loop, and a few of
+    /// those make it look stopped. To look at the phase again, use <see cref="Phase"/>.
     /// </summary>
     /// <param name="ram">The C64's 64 KB of RAM, for example <c>LibretroCore.SystemRam</c>.</param>
     public GamePhase Update(ReadOnlySpan<byte> ram)

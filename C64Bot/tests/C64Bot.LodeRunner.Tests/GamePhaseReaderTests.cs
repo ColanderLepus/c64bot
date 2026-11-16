@@ -35,6 +35,35 @@ public class GamePhaseReaderTests
     }
 
     [Fact]
+    public void Phase_ReadManyTimes_StaysTheLastPhaseWithoutCountingFrames()
+    {
+        // Arrange
+        var reader = new GamePhaseReader();
+        reader.Update(Ram(counter: 4));
+        reader.Update(Ram(counter: 3));
+
+        // Act
+        var phases = Enumerable.Range(0, 10).Select(_ => reader.Phase).ToList();
+
+        // Assert
+        Assert.All(phases, phase => Assert.Equal(GamePhase.Playing, phase));
+        Assert.True(reader.MainLoopRunning);
+    }
+
+    [Fact]
+    public void Phase_BeforeTheFirstUpdate_IsOther()
+    {
+        // Arrange
+        var reader = new GamePhaseReader();
+
+        // Act
+        var phase = reader.Phase;
+
+        // Assert
+        Assert.Equal(GamePhase.Other, phase);
+    }
+
+    [Fact]
     public void Update_CounterDroppingBackInTheDemo_SetsMainLoopRunning()
     {
         // Arrange

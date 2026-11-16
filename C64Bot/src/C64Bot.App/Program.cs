@@ -162,6 +162,12 @@ static void PrintGameState(ReadOnlySpan<byte> ram)
         Console.WriteLine($"  |{line}|");
     Console.WriteLine(border);
 
+    Console.WriteLine(
+        $"  Level {state.LevelNumber}, lives {state.Lives}, score {state.Score}, gold left {state.GoldLeft}; " +
+        "holes: " + (state.Holes.Count == 0
+            ? "none"
+            : string.Join(" ", state.Holes.Select(h => $"({h.Position.Column},{h.Position.Row}) {h.PassesLeft} passes left"))));
+
     var player = state.Player;
     Console.WriteLine(
         $"  Player: ({player.Position.Column},{player.Position.Row}) offset {player.OffsetX:+0;-0;0},{player.OffsetY:+0;-0;0}, " +

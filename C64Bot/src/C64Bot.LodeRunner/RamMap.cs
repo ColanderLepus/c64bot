@@ -90,6 +90,26 @@ public static class RamMap
     /// </summary>
     public const int GuardRespawnTimers = 0x1298;
 
+    /// <summary>
+    /// The column of the hole in slot i is at this address + i, for slots 0 to <see cref="Hole.MaxCount"/> − 1. Only
+    /// slots whose timer (<see cref="HoleTimers"/>) isn't 0 hold a hole.
+    /// </summary>
+    public const int HoleColumns = 0x12A0;
+
+    /// <summary>The row of the hole in slot i is at this address + i.</summary>
+    public const int HoleRows = 0x12C0;
+
+    /// <summary>
+    /// The timer of the hole in slot i is at this address + i: 0 for a free slot; 180 when a dig finishes, then one
+    /// less each pass. The hole fills in, in pictures, at 20 and 10, and is a brick again at 0.
+    /// </summary>
+    public const int HoleTimers = 0x12E0;
+
+    /// <summary>
+    /// The score, 4 bytes of BCD (two decimal digits per byte), lowest byte first.
+    /// </summary>
+    public const int Score = 0x130A;
+
     /// <summary><c>$00</c> while the player falls, <c>$20</c> when he doesn't, <c>$FF</c> when a level starts.</summary>
     public const int PlayerFalling = 0x1315;
 
