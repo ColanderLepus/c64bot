@@ -27,5 +27,5 @@ Done one step at a time, checking each step before starting the next. Project na
 
 ## Notes
 
-- On 2026-11-15 `C64Bot.Vice` and `C64Bot.Vice.Tests` were renamed `C64Bot.ViceMonitor` and `C64Bot.ViceMonitor.Tests`, when the emulator layer moved to `C64Bot.Libretro` (D2). S2 and S3 above use the old names.
+- On 2026-11-15 `C64Bot.Vice` and `C64Bot.Vice.Tests` were renamed `C64Bot.ViceMonitor` and `C64Bot.ViceMonitor.Tests`, when the emulator layer moved to `C64Bot.Libretro` (D2). S2 and S3 above use the old names. On 2026-11-16 both were removed, unused after M2 (D8).
 - Each template-generated project file repeats `TargetFramework`, `ImplicitUsings` and `Nullable`. Delete them so `Directory.Build.props` is the only place they're set.

@@ -9,7 +9,7 @@ namespace C64Bot.LodeRunner;
 /// <remarks>
 /// <para>
 /// <see cref="Start"/> runs the core flat out through loading, the trainer menu and the title screen into the demo,
-/// presses SPACE, and saves a state at the first frame of the new game. That frame falls in a short window: the game
+/// presses fire, and saves a state at the first frame of the new game. That frame falls in a short window: the game
 /// has set the level to 1 and switched to play mode, but hasn't loaded the level from disk yet.
 /// </para>
 /// <para>
@@ -24,14 +24,14 @@ public sealed class GameStarter
     public const int MaxLevel = 150;
 
     // Loading takes 2,532 frames, the title screen, the demo's start and setting up its level well over 1,000 more,
-    // and the new game starts a few frames after SPACE. The limits leave plenty of room.
+    // and the new game starts a few frames after fire. The limits leave plenty of room.
     private const int MaxFramesToTheTrainerMenu = 3000;
     private const int MaxFramesToTheNextQuestion = 250;
     private const int MaxFramesToTheDemo = 3000;
     private const int MaxFramesToTheNewGame = 250;
 
-    // The keyboard is scanned about once per frame, so a press has to last a few frames to be seen.
-    private const int KeyPressFrames = 5;
+    // The keyboard and the joystick are read about once per frame, so a press has to last a few frames to be seen.
+    private const int PressFrames = 5;
 
     private readonly LibretroCore _core;
     private readonly byte[] _newGame;
@@ -70,31 +70,32 @@ public sealed class GameStarter
         RunUntil("the note about the level skip", () => ScreenText().Contains("SKIPS"), MaxFramesToTheNextQuestion);
         Type(RetroKey.Space);
 
-        // SPACE is only seen once the demo runs, not while it sets up its level.
+        // Fire is only seen once the demo runs, not while it sets up its level.
         var reader = new GamePhaseReader();
         RunUntil("the demo", () => reader.Update(core.SystemRam) == GamePhase.Demo && reader.MainLoopRunning,
             MaxFramesToTheDemo);
 
-        // SPACE ends the demo. The new game starts when the game switches to play mode, with the demo's player still
-        // dead; it brings him back to life just before it loads the level, about 17 frames later.
-        core.PressKey(RetroKey.Space);
-        var spaceDown = true;
+        // Fire ends the demo. The new game starts when the game switches to play mode, with the demo's player still
+        // dead; it brings him back to life just before it loads the level, about 17 frames later. Fire, unlike a key,
+        // leaves nothing waiting to be read, so the level will wait for the player's first move.
+        core.PressButton(RetroPadButton.B);
+        var fireDown = true;
         var pressedFrames = 0;
         RunUntil("the new game", () =>
         {
-            if (spaceDown && ++pressedFrames == KeyPressFrames)
+            if (fireDown && ++pressedFrames == PressFrames)
             {
-                core.ReleaseKey(RetroKey.Space);
-                spaceDown = false;
+                core.ReleaseButton(RetroPadButton.B);
+                fireDown = false;
             }
 
             return core.SystemRam[RamMap.GameMode] == 2;
         }, MaxFramesToTheNewGame);
 
-        // The C64's keyboard is part of the state, so SPACE must be up there before saving, or it would stay held
-        // down in every game started from it. A key reaches the C64 up to a frame late.
-        if (spaceDown)
-            core.ReleaseKey(RetroKey.Space);
+        // Let go of fire and give the C64 a moment to see it, so the saved moment has no input, like every game
+        // started from it (a load always starts with none, D15).
+        if (fireDown)
+            core.ReleaseButton(RetroPadButton.B);
         RunFrames(2);
 
         if (core.SystemRam[RamMap.Alive] != 0)
@@ -118,9 +119,9 @@ public sealed class GameStarter
         void Type(RetroKey key)
         {
             core.PressKey(key);
-            RunFrames(KeyPressFrames);
+            RunFrames(PressFrames);
             core.ReleaseKey(key);
-            RunFrames(KeyPressFrames);
+            RunFrames(PressFrames);
         }
 
         void RunFrames(int count)
@@ -149,13 +150,19 @@ public sealed class GameStarter
     }
 
     /// <summary>
-    /// Starts a new game at the given level. The game then loads and sets up the level by itself, and starts it
-    /// about 640 frames later (<see cref="GamePhase.Playing"/>), without waiting for a move.
+    /// Starts a new game at the given level. The game then loads and sets up the level by itself, in about 640
+    /// frames, and waits for the player's first move.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Can be called any number of times; each call starts a new game from the moment <see cref="Start"/> saved.
-    /// The level doesn't wait for a first move because the SPACE that started the new game is still waiting to be
-    /// read, as in any new game. After a death, the level does wait for a move.
+    /// </para>
+    /// <para>
+    /// It loads a state, so it lets go of all input (<see cref="LibretroCore.LoadState"/>, D15): press the first move
+    /// after calling it, even if the same move was held before. The phase is <see cref="GamePhase.LevelStarting"/>
+    /// until that move, which has to be held until it's <see cref="GamePhase.Playing"/>: RAM doesn't show when the
+    /// level is ready for it, and a short press can come too early.
+    /// </para>
     /// </remarks>
     /// <param name="level">The level, 1 to <see cref="MaxLevel"/>.</param>
     /// <exception cref="ArgumentOutOfRangeException">The level is outside 1 to <see cref="MaxLevel"/>.</exception>

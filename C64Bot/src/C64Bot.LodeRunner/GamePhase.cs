@@ -17,7 +17,8 @@ public enum GamePhase
     Title,
 
     /// <summary>
-    /// The game playing itself. SPACE starts a real game.
+    /// The game playing itself. Fire or SPACE starts a real game, but only once the demo runs, not while it sets up
+    /// its level.
     /// </summary>
     Demo,
 

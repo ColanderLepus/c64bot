@@ -80,10 +80,10 @@ public sealed unsafe partial class LibretroCore
     }
 
     // The core asks about one button at a time. Only the first RetroPad has buttons; everything else is
-    // never pressed.
+    // never pressed. In the first frame after a load, nothing is (see LoadState).
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static short OnInputState(uint port, uint device, uint index, uint id) =>
-        s_current is { } core && port == 0 && device == DeviceJoypad && id < 16
+        s_current is { } core && !core._noInputNextFrame && port == 0 && device == DeviceJoypad && id < 16
             ? (short)((core._pressedButtons >> (int)id) & 1)
             : (short)0;
 

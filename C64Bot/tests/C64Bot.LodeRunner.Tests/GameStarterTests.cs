@@ -3,49 +3,122 @@ using C64Bot.Libretro.Tests;
 
 namespace C64Bot.LodeRunner.Tests;
 
-public class GameStarterTests
+[Collection(LodeRunnerCollection.Name)]
+public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
 {
-    // Setting up a level takes about 650 frames after StartLevel; this leaves room.
+    // Setting up a level takes about 650 frames after StartLevel; these leave room.
     private const int FramesToSetUpALevel = 900;
+    private const int MaxFramesUntilPlaying = 1500;
+
+    private LibretroCore Core => lodeRunner.Core;
 
     [CoreFact]
     public void StartLevel_Level5AfterLevel1_SetsUpADifferentLevelNumberedFive()
     {
         // Arrange
-        using var core = LoadLodeRunner();
-        var starter = GameStarter.Start(core, unlimitedLives: false);
-        starter.StartLevel(1);
-        RunFrames(core, FramesToSetUpALevel);
-        var level1 = LevelAsBuilt(core);
+        lodeRunner.Starter.StartLevel(1);
+        RunFrames(FramesToSetUpALevel);
+        var level1 = LevelAsBuilt();
 
         // Act
-        starter.StartLevel(5);
-        RunFrames(core, FramesToSetUpALevel);
+        lodeRunner.Starter.StartLevel(5);
+        RunFrames(FramesToSetUpALevel);
 
         // Assert
-        Assert.Equal(5, core.SystemRam[RamMap.LevelNumber]);
-        Assert.Equal(4, core.SystemRam[RamMap.LevelNumberOnDisk]);
-        Assert.NotEqual(level1, LevelAsBuilt(core));
+        Assert.Equal(5, Core.SystemRam[RamMap.LevelNumber]);
+        Assert.Equal(4, Core.SystemRam[RamMap.LevelNumberOnDisk]);
+        Assert.NotEqual(level1, LevelAsBuilt());
     }
 
-    private static LibretroCore LoadLodeRunner()
+    [CoreFact]
+    public void StartLevel_WithoutAMove_KeepsWaitingForTheFirstMove()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "C64Bot.LodeRunner.Tests");
-        var core = LibretroCore.Load(CoreFiles.CorePath);
-        core.Initialize(
-            Directory.CreateDirectory(Path.Combine(directory, "system")).FullName,
-            Directory.CreateDirectory(Path.Combine(directory, "saves")).FullName,
-            new Dictionary<string, string> { ["vice_gfx_colors"] = "24bit", ["vice_joyport"] = "2" });
-        core.LoadGame(CoreFiles.DiskPath);
-        return core;
+        // Arrange
+        lodeRunner.Starter.StartLevel(1);
+
+        // Act
+        var phase = RunFramesWithNoInput(MaxFramesUntilPlaying);
+
+        // Assert
+        Assert.Equal(GamePhase.LevelStarting, phase);
     }
 
-    private static void RunFrames(LibretroCore core, int frames)
+    [CoreFact]
+    public void StartLevel_SameMoveHeldBeforeAndAfter_StartsTheLevel()
+    {
+        // Arrange: level 1 running, started by holding left, and left still held
+        lodeRunner.Starter.StartLevel(1);
+        var firstTry = HoldUntilPlaying(RetroPadButton.Left);
+
+        // Act: a new try at the same level, holding left again
+        lodeRunner.Starter.StartLevel(1);
+        var secondTry = HoldUntilPlaying(RetroPadButton.Left);
+
+        // Assert
+        Assert.Equal(GamePhase.Playing, firstTry);
+        Assert.Equal(GamePhase.Playing, secondTry);
+    }
+
+    [CoreFact]
+    public void LoadState_StateSavedWhileWalking_ComesBackWithThePlayerStandingStill()
+    {
+        // Arrange: level 1 running, the player walking left when the state is saved; then let go, so the core
+        // last saw no buttons before the load
+        lodeRunner.Starter.StartLevel(1);
+        HoldUntilPlaying(RetroPadButton.Left);
+        RunFrames(10);
+        var walking = Core.SaveState();
+        Core.ReleaseButton(RetroPadButton.Left);
+        RunFrames(5);
+
+        // Act
+        Core.LoadState(walking);
+        RunFrames(10); // a step the game had started before the save may still be finished
+        var afterTheLoad = PlayerPlace();
+        RunFrames(50);
+        var aSecondLater = PlayerPlace();
+
+        // Assert
+        Assert.Equal(afterTheLoad, aSecondLater);
+    }
+
+    // Holds the button, pressing it again each frame as a bot would, until the level runs or it's given up.
+    private GamePhase HoldUntilPlaying(RetroPadButton button)
+    {
+        var reader = new GamePhaseReader();
+        for (var frame = 0; frame < MaxFramesUntilPlaying; frame++)
+        {
+            Core.PressButton(button);
+            Core.RunFrame();
+            if (reader.Update(Core.SystemRam) == GamePhase.Playing)
+                break;
+        }
+
+        return reader.Phase;
+    }
+
+    private GamePhase RunFramesWithNoInput(int frames)
+    {
+        var reader = new GamePhaseReader();
+        for (var frame = 0; frame < frames; frame++)
+        {
+            Core.RunFrame();
+            reader.Update(Core.SystemRam);
+        }
+
+        return reader.Phase;
+    }
+
+    private void RunFrames(int frames)
     {
         for (var i = 0; i < frames; i++)
-            core.RunFrame();
+            Core.RunFrame();
     }
 
+    // The player's column and his place within it.
+    private (byte Column, byte Step) PlayerPlace() =>
+        (Core.SystemRam[RamMap.PlayerColumn], Core.SystemRam[RamMap.PlayerStepX]);
+
     // The level as built ($0A00-$0BC3), without the player and the guards.
-    private static byte[] LevelAsBuilt(LibretroCore core) => core.SystemRam[0x0A00..0x0BC4].ToArray();
+    private byte[] LevelAsBuilt() => Core.SystemRam[0x0A00..0x0BC4].ToArray();
 }

@@ -34,6 +34,36 @@ public class LibretroCoreStateTests(LodeRunnerAtTheTrainerMenu lodeRunner)
     }
 
     [CoreFact]
+    public void LoadState_KeyHeldBeforeTheLoad_IsLetGoOf()
+    {
+        // The KERNAL's modifier keys held, updated by its keyboard scan: bit 0 Shift, bit 1 C=.
+        const int ModifierKeys = 0x028D;
+
+        // Arrange
+        var state = Core.SaveState();
+        try
+        {
+            Core.PressKey(RetroKey.LeftShift);
+            RunFrames(5);
+            var modifiersBeforeTheLoad = Core.SystemRam[ModifierKeys];
+
+            // Act
+            Core.LoadState(state);
+            Core.PressKey(RetroKey.LeftCtrl); // C= on the C64; any key event makes VICE update the C64's keyboard
+            RunFrames(10);
+            var modifiersAfterTheLoad = Core.SystemRam[ModifierKeys];
+
+            // Assert
+            Assert.Equal(1, modifiersBeforeTheLoad);
+            Assert.Equal(2, modifiersAfterTheLoad); // C= only: Shift was let go of by the load
+        }
+        finally
+        {
+            Core.LoadState(state);
+        }
+    }
+
+    [CoreFact]
     public void LoadState_EmptyState_ThrowsArgumentException()
     {
         // Act
@@ -61,5 +91,11 @@ public class LibretroCoreStateTests(LodeRunnerAtTheTrainerMenu lodeRunner)
         {
             Core.LoadState(state);
         }
+    }
+
+    private void RunFrames(int frames)
+    {
+        for (var i = 0; i < frames; i++)
+            Core.RunFrame();
     }
 }

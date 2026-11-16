@@ -65,12 +65,12 @@ windowThread.Start();
 Console.WriteLine("Running in real time. Close the window to stop.");
 using (var clock = new FrameClock(core.FramesPerSecond))
 {
-    // The game sets up the level and starts it by itself; after a death it waits for a move (hold a direction
-    // until the level runs). The window's keyboard goes to the game (see KeyMap). The keys in this console window are for the app itself:
-    // T saves a state in memory and L loads it, so the game jumps back to that moment. R remembers the RAM and D
-    // shows what has changed since then (M2 F1).
+    // The game sets up the level, then waits for the first move: hold a direction until the level runs (also after
+    // a death). The window's keyboard goes to the game (see KeyMap). The keys in this console window are for the app
+    // itself: T saves a state in memory and L loads it, so the game jumps back to that moment. R remembers the RAM
+    // and D shows what has changed since then (M2 F1).
     Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
-    Console.WriteLine("The level starts by itself. After a death, hold a direction until it runs again.");
+    Console.WriteLine("The level waits for your first move: hold a direction until it runs (also after a death).");
     Console.WriteLine("In this console window: T saves a state, L loads it.");
     Console.WriteLine("R remembers the RAM, D shows what has changed since then. G shows the game state.");
 

@@ -52,6 +52,13 @@ public sealed unsafe partial class LibretroCore : IDisposable
     // The buttons held down on the first RetroPad, one bit per button, numbered as in RetroPadButton.
     private int _pressedButtons;
 
+    // The keys held down, so that loading a state can let go of them.
+    private readonly HashSet<RetroKey> _pressedKeys = [];
+
+    // Set by LoadState: the next frame runs with no input at all, whatever is held (see LoadState). Keys pressed
+    // meanwhile reach the core after that frame.
+    private bool _noInputNextFrame;
+
     private LibretroCore(nint library, CoreFunctions functions)
     {
         _library = library;
@@ -299,11 +306,19 @@ public sealed unsafe partial class LibretroCore : IDisposable
     {
         ThrowUnlessGameLoaded();
         _functions.Run();
+
+        // The first frame after a load ran without input; now the keys pressed meanwhile can go to the core.
+        if (_noInputNextFrame)
+        {
+            _noInputNextFrame = false;
+            foreach (var key in _pressedKeys)
+                _keyboardEvent(1, (uint)key, 0, 0);
+        }
     }
 
     /// <summary>
-    /// Presses a key on the emulated keyboard and holds it down until <see cref="ReleaseKey"/>. The core sees it
-    /// at the next frame.
+    /// Presses a key on the emulated keyboard and holds it down until <see cref="ReleaseKey"/> or
+    /// <see cref="LoadState"/>. The core sees it at the next frame; right after a load, at the frame after that.
     /// </summary>
     /// <exception cref="InvalidOperationException">The core hasn't asked for key presses.</exception>
     /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>
@@ -317,8 +332,8 @@ public sealed unsafe partial class LibretroCore : IDisposable
     public void ReleaseKey(RetroKey key) => SendKeyboardEvent(key, down: false);
 
     /// <summary>
-    /// Holds down a button on the first RetroPad until <see cref="ReleaseButton"/>. The core sees it at the next
-    /// frame.
+    /// Holds down a button on the first RetroPad until <see cref="ReleaseButton"/> or <see cref="LoadState"/>. The
+    /// core sees it at the next frame; right after a load, at the frame after that.
     /// </summary>
     public void PressButton(RetroPadButton button) => _pressedButtons |= 1 << (int)button;
 
@@ -341,7 +356,8 @@ public sealed unsafe partial class LibretroCore : IDisposable
     /// halfway through one. The size can differ from one state to the next.
     /// </para>
     /// <para>
-    /// Buttons and keys held down aren't part of the state: they belong to the frontend, and stay as they are.
+    /// Buttons and keys held down while saving don't matter: loading a state always starts with no input at all
+    /// (see <see cref="LoadState"/>).
     /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">No game has been loaded, or the core couldn't save its state.</exception>
@@ -367,11 +383,28 @@ public sealed unsafe partial class LibretroCore : IDisposable
 
     /// <summary>
     /// Loads a state saved with <see cref="SaveState"/>, so the emulated machine carries on from the moment it
-    /// was saved.
+    /// was saved, with no input at all: like booting straight into that moment.
     /// </summary>
     /// <remarks>
-    /// Use the same core build and the same disk as when the state was saved. Buttons and keys held down stay
-    /// as they are.
+    /// <para>
+    /// Use the same core build and the same disk as when the state was saved.
+    /// </para>
+    /// <para>
+    /// Every button and key held down is let go of, and the first frame after the load runs with no input at all,
+    /// even buttons and keys pressed right after the load. From the frame after that, input works as usual (D15).
+    /// </para>
+    /// <para>
+    /// Why: the VICE core passes the joystick and the keys on to the emulated machine only when they differ from the
+    /// last values it was given, and those aren't part of the state. A button held across a load would never arrive;
+    /// the frame without buttons brings the joystick's last value back to "nothing", and letting go of the keys does
+    /// the same for them. Within one frame, the core passes key changes on in key-code order, not in the order they
+    /// came, so the frame without input also keeps a key let go of by the load (Shift, say) from still being down
+    /// when a key pressed right after it arrives. The machine itself already comes back with the joystick at rest.
+    /// </para>
+    /// <para>
+    /// Not covered: a state saved while a key was held can come back with that key still down in the machine,
+    /// until the next key event. So let go of keys a frame or two before saving.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">The state is empty.</exception>
     /// <exception cref="InvalidOperationException">
@@ -389,6 +422,13 @@ public sealed unsafe partial class LibretroCore : IDisposable
             if (_functions.Unserialize(data, (nuint)state.Length) == 0)
                 throw new InvalidOperationException("The core couldn't load the state.");
         }
+
+        // No input at all from here: let go of everything now, and give the first frame no input either.
+        foreach (var key in _pressedKeys)
+            _keyboardEvent(0, (uint)key, 0, 0);
+        _pressedKeys.Clear();
+        _pressedButtons = 0;
+        _noInputNextFrame = true;
     }
 
     public void Dispose()
@@ -462,6 +502,15 @@ public sealed unsafe partial class LibretroCore : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_keyboardEvent == null)
             throw new InvalidOperationException("The core hasn't asked for key presses (SET_KEYBOARD_CALLBACK).");
+
+        if (down)
+            _pressedKeys.Add(key);
+        else
+            _pressedKeys.Remove(key);
+
+        // In the first frame after a load, keys pressed are held back until that frame is over (see RunFrame).
+        if (_noInputNextFrame)
+            return;
 
         // The character is for typing text and the modifiers are Shift, Ctrl and so on; neither is needed here.
         _keyboardEvent(down ? (byte)1 : (byte)0, (uint)key, 0, 0);
