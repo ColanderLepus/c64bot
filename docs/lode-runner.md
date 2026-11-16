@@ -50,11 +50,12 @@ Observations about the game itself, gathered while playing and in the libretro c
 - **The joystick as the C64 sees it** (`$DC00`, read in the libretro core, 2026-11-15): nothing `$7F`, right `$77`, left `$7B`, up `$7E`, fire `$6F`. A pressed direction or fire pulls its bit low: bit 0 up, bit 2 left, bit 3 right, bit 4 fire, and bit 1 down (not measured; the standard C64 layout).
 - **SPACE** starts the game from the demo (see Start-up).
 - **C= skips to the next level** during the game, as the trainer menu says. In our window that's Left Ctrl, which the libretro core maps to C= (tried by the owner, 2026-11-15).
-- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2.
+- **Digging** works in our window, also while the player is running (owner, 2026-11-15). Exactly which inputs dig, and in which direction, is to be written down in M2. Seen in M2 F7: at the start of level 1, the player facing right, fire alone dug the brick down to his **left**.
 
 ### Levels
 
 - Undiggable blocks look different from diggable bricks. On level 1, the left part of the top brick row is undiggable.
+- **Hidden exit ladders** (M2 F7, all 150 levels): 39 levels have none, so their way out is there from the start. The others have up to 45, the most the game keeps (it blanks out any more). Level 1's are in column 18, rows 0–3.
 
 ### Technical
 
@@ -68,7 +69,7 @@ Observations about the game itself, gathered while playing and in the libretro c
 
 RAM is read after every frame, and most frames end halfway through a pass of the game's main loop (M2 F6). So each thing is read from where it's always complete (D14):
 
-- **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. Holes and gold: to be settled in F7 and F10.
+- **The level:** the grid as built (`$0A00`), not as played (`$0800`), whose player and guard tiles can be halfway through a move. It includes the gold still lying around and, once all gold is taken, the exit ladders. Holes aren't in it: they come from the hole tables (F10).
 - **The guards:** their tables (`$1260`–`$129F`), not the grid's guard tiles or the zero-page copy (`$15`–`$1B`). The game writes a guard's table entry in one go after his move, so every entry is complete; the guard being moved is one move (at most 33 ms) behind.
 - **The player:** `$03`–`$07`. About 1 frame in 3,000 catches his move halfway; then the grid as played has no player tile at his column and row, and the frame is skipped.
 
@@ -80,8 +81,8 @@ Addresses are for version A, from the disassembly (see above) unless the notes s
 
 | Address | Size | Meaning | Notes |
 | --- | --- | --- | --- |
-| `$0800`–`$09C3` | 16 × 28 | The level as played: one byte per tile, row by row. Row r starts at `$0800 + 28 × r` for rows 0–8, and 4 bytes later for rows 9–15 (row 9 at `$0900`), so no row crosses a page. Holes, the player (9) and the guards (8) are marked in it. | Confirmed (F1): guard and player codes moving; a taken gold went `07` → `00` at row 14, column 7 (`$0993`). |
-| `$0A00`–`$0BC3` | 16 × 28 | The level as built, laid out the same way, without the player, guards or holes. Respawning guards look for an empty tile in this one. | Confirmed (F1): the same gold went `07` → `00` here too (`$0B93`). |
+| `$0800`–`$09C3` | 16 × 28 | The level as played: one byte per tile, row by row. Row r starts at `$0800 + 28 × r` for rows 0–8, and 4 bytes later for rows 9–15 (row 9 at `$0900`), so no row crosses a page. Holes (as empty tiles), the player (9) and the guards (8) are marked in it. Only digging, closing holes, the exit ladders and the figures' moves write it. | Confirmed (F1, F7): guard and player codes moving; a taken gold went `07` → `00` at row 14, column 7 (`$0993`); on all 150 levels it differs from the level as built only at the player and guards when the level starts. |
+| `$0A00`–`$0BC3` | 16 × 28 | The level as built, laid out the same way, without the player, guards or holes: a dug brick stays a brick. Gold leaves it when taken or picked up by a guard and comes back when dropped; the exit ladders join it as ladders (3) once all gold is taken. Respawning guards look for an empty tile in this one. | Confirmed (F1, F7): the same gold went `07` → `00` here too (`$0B93`); on all 150 levels it holds only codes 0–5 and 7, and its gold adds up to `$130E`. |
 
 Tile codes: 0 empty, 1 brick (diggable), 2 solid block, 3 ladder, 4 rope, 5 trap brick (looks like brick, falls through), 6 hidden exit ladder (blanked when the level starts and listed in the exit ladder table), 7 gold, 8 guard, 9 player.
 
@@ -125,8 +126,8 @@ Up to 5 guards, numbered 1–5; entry 0 of each table is unused. The main loop m
 | `$12A0`+i | 31 | Column of hole i (0–30) | |
 | `$12C0`+i | 31 | Row of hole i | |
 | `$12E0`+i | 31 | Open time of hole i, 0 = no hole. Starts at `$B4` (180 passes, about 6 s) and counts down once per pass; the hole fills in stages at `$14` and `$0A`. | Changing (F1): `8F` → `70` in 50 frames, 31 passes. |
-| `$1301` | 1 | Number of hidden exit ladders | |
-| `$1201`+n, `$1231`+n | 1 each | Column and row of hidden exit ladder n (from 1) | |
+| `$1301` | 1 | Number of hidden exit ladders, at most 45 | Confirmed (F7): 0–45 over the 150 levels, 4 on level 1. |
+| `$1201`+n, `$1231`+n | 1 each | Column and row of hidden exit ladder n (from 1) | Confirmed (F7): level 1's are column 18, rows 0–3; on every level they're on empty tiles. |
 
 ### Game
 

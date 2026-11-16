@@ -10,6 +10,30 @@ namespace C64Bot.LodeRunner;
 public static class RamMap
 {
     /// <summary>
+    /// The level as played: one byte per tile (see <see cref="TileAddress"/>), with holes, the player and the guards
+    /// in it. Its player and guard tiles can be halfway through a move (D14).
+    /// </summary>
+    public const int LevelAsPlayed = 0x0800;
+
+    /// <summary>
+    /// The level as built, laid out like <see cref="LevelAsPlayed"/>: the level's own tiles and gold, without holes,
+    /// the player or the guards. Exit ladders join it once all gold is taken.
+    /// </summary>
+    public const int LevelAsBuilt = 0x0A00;
+
+    /// <summary>
+    /// The column of hidden exit ladder n is at this address + n, for n from 1 to <see cref="HiddenLadderCount"/>.
+    /// </summary>
+    public const int HiddenLadderColumns = 0x1200;
+
+    /// <summary>
+    /// The row of hidden exit ladder n is at this address + n, for n from 1 to <see cref="HiddenLadderCount"/>.
+    /// </summary>
+    public const int HiddenLadderRows = 0x1230;
+
+    public const int HiddenLadderCount = 0x1301;
+
+    /// <summary>
     /// The C64's interrupt vector (2 bytes, low byte first): the routine run on every interrupt. It points to
     /// <see cref="GameInterruptRoutine"/> once the game runs.
     /// </summary>
@@ -24,13 +48,13 @@ public static class RamMap
     /// The level number, 1–150. It goes up as soon as a level is completed (or skipped), before the next one is
     /// set up.
     /// </summary>
-    public const int Level = 0x1305;
+    public const int LevelNumber = 0x1305;
 
     /// <summary>
-    /// The level number as stored on disk, 0–149: one less than <see cref="Level"/>. When a level starts, the
+    /// The level number as stored on disk, 0–149: one less than <see cref="LevelNumber"/>. When a level starts, the
     /// game loads this one from disk.
     /// </summary>
-    public const int LevelOnDisk = 0x1310;
+    public const int LevelNumberOnDisk = 0x1310;
 
     /// <summary>
     /// The game's own mode: 0 title screen, 1 demo, 2 play (also while the game-over sign and the high-score list
@@ -55,4 +79,14 @@ public static class RamMap
     /// waits until it reaches the game speed (5 at normal speed).
     /// </summary>
     public const int InterruptCounter = 0x132D;
+
+    /// <summary>
+    /// Gives the address of a tile in one of the level grids (<see cref="LevelAsBuilt"/> or
+    /// <see cref="LevelAsPlayed"/>): 28 bytes per row, but rows 9–15 start 4 bytes later, so no row crosses a page.
+    /// </summary>
+    /// <param name="grid">The grid's first address.</param>
+    /// <param name="column">0–27, from the left.</param>
+    /// <param name="row">0–15, from the top.</param>
+    public static int TileAddress(int grid, int column, int row) =>
+        grid + Level.Width * row + (row >= 9 ? 4 : 0) + column;
 }

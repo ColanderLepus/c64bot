@@ -165,7 +165,7 @@ public sealed class GameStarter
         ArgumentOutOfRangeException.ThrowIfGreaterThan(level, MaxLevel);
 
         _core.LoadState(_newGame);
-        _core.WriteSystemRam(RamMap.LevelOnDisk, [(byte)(level - 1)]);
-        _core.WriteSystemRam(RamMap.Level, [(byte)level]);
+        _core.WriteSystemRam(RamMap.LevelNumberOnDisk, [(byte)(level - 1)]);
+        _core.WriteSystemRam(RamMap.LevelNumber, [(byte)level]);
     }
 }

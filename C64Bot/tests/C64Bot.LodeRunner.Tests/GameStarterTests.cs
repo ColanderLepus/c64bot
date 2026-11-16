@@ -23,8 +23,8 @@ public class GameStarterTests
         RunFrames(core, FramesToSetUpALevel);
 
         // Assert
-        Assert.Equal(5, core.SystemRam[RamMap.Level]);
-        Assert.Equal(4, core.SystemRam[RamMap.LevelOnDisk]);
+        Assert.Equal(5, core.SystemRam[RamMap.LevelNumber]);
+        Assert.Equal(4, core.SystemRam[RamMap.LevelNumberOnDisk]);
         Assert.NotEqual(level1, LevelAsBuilt(core));
     }
 

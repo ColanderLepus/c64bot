@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using C64Bot.App;
 using C64Bot.Libretro;
@@ -72,7 +72,7 @@ using (var clock = new FrameClock(core.FramesPerSecond))
     Console.WriteLine("In the window: arrow keys and Right Ctrl are the joystick, other keys the C64's keyboard.");
     Console.WriteLine("The level starts by itself. After a death, hold a direction until it runs again.");
     Console.WriteLine("In this console window: T saves a state, L loads it.");
-    Console.WriteLine("R remembers the RAM, D shows what has changed since then.");
+    Console.WriteLine("R remembers the RAM, D shows what has changed since then. G shows the level.");
 
     byte[]? savedState = null;
     var savedAt = 0;
@@ -114,6 +114,11 @@ using (var clock = new FrameClock(core.FramesPerSecond))
                 Console.WriteLine($"Frame {frame}: changes since frame {rememberedAt}:");
                 PrintRamChanges(rememberedRam.Compare(new RamImage(core.SystemRam)));
             }
+            else if (key == ConsoleKey.G)
+            {
+                Console.WriteLine($"Frame {frame}: the level (M2 F7):");
+                PrintLevel(core.SystemRam);
+            }
         }
 
         clock.WaitForNextFrame();
@@ -131,15 +136,42 @@ using (var clock = new FrameClock(core.FramesPerSecond))
                 $"interrupt counter ${ram[RamMap.InterruptCounter]:X2})");
         }
 
-        if (phase is not (GamePhase.Other or GamePhase.Title or GamePhase.Demo) && core.SystemRam[RamMap.Level] != shownLevel)
+        if (phase is not (GamePhase.Other or GamePhase.Title or GamePhase.Demo) && core.SystemRam[RamMap.LevelNumber] != shownLevel)
         {
-            shownLevel = core.SystemRam[RamMap.Level];
+            shownLevel = core.SystemRam[RamMap.LevelNumber];
             Console.WriteLine($"Frame {frame}: level {shownLevel}");
         }
     }
 }
 
 windowThread.Join();
+
+// The level as built, framed so its edges show; then the hidden exit ladders, and the tiles where the level as
+// played differs from it (the player, the guards and the holes).
+static void PrintLevel(ReadOnlySpan<byte> ram)
+{
+    var level = Level.Read(ram);
+    var border = "  +" + new string('-', Level.Width) + "+";
+    Console.WriteLine(border);
+    foreach (var line in level.ToString().TrimEnd('\n').Split('\n'))
+        Console.WriteLine($"  |{line}|");
+    Console.WriteLine(border);
+
+    Console.WriteLine("  Hidden exit ladders: " +
+        (level.HiddenLadders.Count == 0 ? "none" : string.Join(" ", level.HiddenLadders.Select(p => $"({p.Column},{p.Row})"))));
+
+    var differences = new List<string>();
+    for (var row = 0; row < Level.Height; row++)
+        for (var column = 0; column < Level.Width; column++)
+        {
+            var built = ram[RamMap.TileAddress(RamMap.LevelAsBuilt, column, row)];
+            var played = ram[RamMap.TileAddress(RamMap.LevelAsPlayed, column, row)];
+            if (built != played)
+                differences.Add($"({column},{row}) built {built} played {played}");
+        }
+
+    Console.WriteLine("  As played differs at: " + (differences.Count == 0 ? "none" : string.Join(", ", differences)));
+}
 
 // One line per 256-byte page that changed. A game redraws its screens all the time, which would bury the
 // interesting changes, so the bytes themselves are only shown for pages with a few changes.

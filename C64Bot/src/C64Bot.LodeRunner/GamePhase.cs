@@ -28,7 +28,7 @@ public enum GamePhase
     /// <remarks>
     /// RAM doesn't tell these apart. The game only reads the joystick once the level is ready, so a first move
     /// held during this phase counts as soon as it can. That a level was completed shows in the level number
-    /// (<see cref="RamMap.Level"/>), which goes up as soon as it is.
+    /// (<see cref="RamMap.LevelNumber"/>), which goes up as soon as it is.
     /// </remarks>
     LevelStarting,
 
