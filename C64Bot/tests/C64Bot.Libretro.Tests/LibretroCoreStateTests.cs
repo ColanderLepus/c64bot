@@ -44,13 +44,13 @@ public class LibretroCoreStateTests(LodeRunnerAtTheTrainerMenu lodeRunner)
         try
         {
             Core.PressKey(RetroKey.LeftShift);
-            RunFrames(5);
+            Core.RunFrames(5);
             var modifiersBeforeTheLoad = Core.SystemRam[ModifierKeys];
 
             // Act
             Core.LoadState(state);
             Core.PressKey(RetroKey.LeftCtrl); // C= on the C64; any key event makes VICE update the C64's keyboard
-            RunFrames(10);
+            Core.RunFrames(10);
             var modifiersAfterTheLoad = Core.SystemRam[ModifierKeys];
 
             // Assert
@@ -91,11 +91,5 @@ public class LibretroCoreStateTests(LodeRunnerAtTheTrainerMenu lodeRunner)
         {
             Core.LoadState(state);
         }
-    }
-
-    private void RunFrames(int frames)
-    {
-        for (var i = 0; i < frames; i++)
-            Core.RunFrame();
     }
 }

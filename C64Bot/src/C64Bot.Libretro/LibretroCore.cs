@@ -302,6 +302,17 @@ public sealed unsafe partial class LibretroCore : IDisposable
     }
 
     /// <summary>
+    /// Runs the emulation for a number of video frames, one after the other (see <see cref="RunFrame"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No game has been loaded.</exception>
+    /// <exception cref="ObjectDisposedException">The core has been disposed.</exception>
+    public void RunFrames(int count)
+    {
+        for (var i = 0; i < count; i++)
+            RunFrame();
+    }
+
+    /// <summary>
     /// Presses a key on the emulated keyboard and holds it down until <see cref="ReleaseKey"/> or
     /// <see cref="LoadState"/>. The core sees it at the next frame; right after a load, at the frame after that.
     /// </summary>

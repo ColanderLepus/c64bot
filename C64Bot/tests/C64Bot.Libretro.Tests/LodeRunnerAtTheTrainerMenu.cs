@@ -13,13 +13,9 @@ public sealed class LodeRunnerAtTheTrainerMenu : IDisposable
         if (!CoreFiles.Exist)
             return;
 
-        var directory = Path.Combine(Path.GetTempPath(), "C64Bot.Libretro.Tests");
-        _core = LibretroCore.Load(CoreFiles.CorePath);
-        _core.Initialize(
-            Directory.CreateDirectory(Path.Combine(directory, "system")).FullName,
-            Directory.CreateDirectory(Path.Combine(directory, "saves")).FullName,
-            new Dictionary<string, string> { ["vice_gfx_colors"] = "24bit", ["vice_joyport"] = "2" });
-        _core.LoadGame(CoreFiles.DiskPath);
+        _core = C64Core.Load(
+            CoreFiles.CorePath, CoreFiles.DiskPath, Path.Combine(Path.GetTempPath(), "C64Bot.Libretro.Tests"),
+            joystickPort: 2);
 
         for (var frame = 0; !ScreenText().Contains("UNLIMITED LIVES"); frame++)
         {
@@ -32,20 +28,7 @@ public sealed class LodeRunnerAtTheTrainerMenu : IDisposable
 
     public LibretroCore Core => _core ?? throw new InvalidOperationException("The core or the disk isn't there.");
 
-    // The C64's 40×25 text screen at $0400 as one string, row after row. Screen codes 1-26 are A-Z and 32-63 match
-    // ASCII; bit 7 only means the character is shown reversed.
-    public string ScreenText()
-    {
-        var screen = Core.SystemRam[0x0400..0x07E8];
-        var text = new char[screen.Length];
-        for (var i = 0; i < screen.Length; i++)
-        {
-            var code = screen[i] & 0x7F;
-            text[i] = code switch { < 32 => (char)('@' + code), < 64 => (char)code, _ => '#' };
-        }
-
-        return new string(text);
-    }
+    public string ScreenText() => TextScreen.Read(Core.SystemRam);
 
     public void Dispose() => _core?.Dispose();
 }

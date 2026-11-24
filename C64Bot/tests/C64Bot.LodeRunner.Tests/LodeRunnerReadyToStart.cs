@@ -10,20 +10,25 @@ public sealed class LodeRunnerReadyToStart : IDisposable
 {
     private readonly LibretroCore? _core;
     private readonly GameStarter? _starter;
+    private readonly LevelDisk? _levels;
 
     public LodeRunnerReadyToStart()
     {
         if (!CoreFiles.Exist)
             return;
 
-        _core = LodeRunnerCore.Load(
-            CoreFiles.CorePath, CoreFiles.DiskPath, Path.Combine(Path.GetTempPath(), "C64Bot.LodeRunner.Tests"));
+        _core = C64Core.Load(
+            CoreFiles.CorePath, CoreFiles.DiskPath, Path.Combine(Path.GetTempPath(), "C64Bot.LodeRunner.Tests"),
+            joystickPort: 2);
         _starter = GameStarter.Start(_core, unlimitedLives: true);
+        _levels = new LevelDisk(DiskImage.Load(CoreFiles.DiskPath));
     }
 
     public LibretroCore Core => _core ?? throw new InvalidOperationException("The core or the disk isn't there.");
 
     public GameStarter Starter => _starter ?? throw new InvalidOperationException("The core or the disk isn't there.");
+
+    public LevelDisk Levels => _levels ?? throw new InvalidOperationException("The core or the disk isn't there.");
 
     public void Dispose() => _core?.Dispose();
 }

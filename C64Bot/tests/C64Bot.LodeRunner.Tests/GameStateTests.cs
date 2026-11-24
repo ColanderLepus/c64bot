@@ -113,7 +113,7 @@ public class GameStateTests
 
         // Assert
         Assert.NotNull(state);
-        Assert.Equal((150, 6, 12_340_250, 7), (state.LevelNumber, state.Lives, state.Score, state.GoldLeft));
+        Assert.Equal((150, 6, 12_340_250, 7), (state.Level.Number, state.Lives, state.Score, state.GoldLeft));
     }
 
     [Fact]

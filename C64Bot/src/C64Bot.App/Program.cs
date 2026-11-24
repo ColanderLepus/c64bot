@@ -10,9 +10,9 @@ const string DiskPath = @"C:\Emulation\ROMs\C64\Lode Runner.d64";
 // The level to start at can be given on the command line; level 1 if not. "noguards" after it leaves out the level's
 // guards, for development (D17).
 var level = 1;
-if (args.Length > 0 && (!int.TryParse(args[0], out level) || level is < 1 or > GameStarter.MaxLevel))
+if (args.Length > 0 && (!int.TryParse(args[0], out level) || level is < 1 or > Level.MaxNumber))
 {
-    Console.WriteLine($"Give a level from 1 to {GameStarter.MaxLevel}, not '{args[0]}'.");
+    Console.WriteLine($"Give a level from 1 to {Level.MaxNumber}, not '{args[0]}'.");
     return;
 }
 
@@ -26,7 +26,7 @@ var withGuards = args.Length < 2;
 
 // The core keeps its own files next to its DLL. Its log lines are only format strings without their values (see
 // LibretroCore's OnLog), so they're left out.
-using var core = LodeRunnerCore.Load(CorePath, DiskPath, Path.GetDirectoryName(CorePath)!, message =>
+using var core = C64Core.Load(CorePath, DiskPath, Path.GetDirectoryName(CorePath)!, joystickPort: 2, message =>
 {
     if (!message.StartsWith("Core log", StringComparison.Ordinal))
         Console.WriteLine(message);
@@ -40,11 +40,9 @@ Console.WriteLine(
 // level.
 var startTime = System.Diagnostics.Stopwatch.StartNew();
 var starter = GameStarter.Start(core, unlimitedLives: true);
-Console.WriteLine($"At the start of a new game after {starter.StartFrames:N0} frames, {startTime.Elapsed.TotalSeconds:F1} s.");
-if (withGuards)
-    starter.StartLevel(level);
-else
-    starter.StartLevel(LevelData.FromDisk(DiskImage.Load(DiskPath), level).WithoutGuards());
+Console.WriteLine($"At the start of a new game after {startTime.Elapsed.TotalSeconds:F1} s.");
+var levels = new LevelDisk(DiskImage.Load(DiskPath));
+starter.StartLevel(withGuards ? levels[level] : levels[level].WithoutGuards());
 Console.WriteLine($"Starting level {level}{(withGuards ? "" : " without its guards")}.");
 
 // The window runs on a thread of its own: WPF needs a single-threaded apartment (STA) thread, and this way the
@@ -164,7 +162,7 @@ static void PrintGameState(ReadOnlySpan<byte> ram)
     Console.WriteLine(border);
 
     Console.WriteLine(
-        $"  Level {state.LevelNumber}, lives {state.Lives}, score {state.Score}, gold left {state.GoldLeft}; " +
+        $"  Level {state.Level.Number}, lives {state.Lives}, score {state.Score}, gold left {state.GoldLeft}; " +
         "holes: " + (state.Holes.Count == 0
             ? "none"
             : string.Join(" ", state.Holes.Select(h => $"({h.Position.Column},{h.Position.Row}) {h.PassesLeft} passes left"))));

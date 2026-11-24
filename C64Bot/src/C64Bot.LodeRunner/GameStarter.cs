@@ -9,24 +9,20 @@ namespace C64Bot.LodeRunner;
 /// <remarks>
 /// <para>
 /// <see cref="Start"/> runs the core flat out through loading, the trainer menu and the title screen into the demo,
-/// presses fire, and saves the first frame of the new game (a <see cref="StartPoint"/>). That frame falls in a short
-/// window: the game has set the level to 1 and switched to play mode, but hasn't loaded the level from disk yet.
+/// presses fire, and saves the first frame of the new game. That frame falls in a short window: the game has set the
+/// level to 1 and switched to play mode, but hasn't loaded the level from disk yet.
 /// </para>
 /// <para>
-/// <see cref="StartLevel(int)"/> starts from there and writes the wanted level number into RAM, so the game loads
-/// that level from disk by itself. Lives and score are those of a new game, unlike when levels are skipped with C=.
-/// <see cref="StartLevel(LevelData)"/> also writes the level, so it can be any level, with any changes.
+/// <see cref="StartLevel"/> goes back to that frame and puts a level where the game will look for it, so the game
+/// sets that level up. Lives and score are those of a new game, unlike when levels are skipped with C=.
 /// </para>
 /// <para>
-/// This is a tool for development and tests, and the only code that writes the game's RAM (D13). The bot itself
-/// plays a running game and knows nothing about it (D17).
+/// This is for development and tests, and the only code that writes the game's RAM (D13). The finished bot plays the
+/// game as it is, loaded the regular way (D17).
 /// </para>
 /// </remarks>
 public sealed class GameStarter
 {
-    /// <summary>The highest level number; the game has 150 levels.</summary>
-    public const int MaxLevel = 150;
-
     // Loading takes 2,532 frames, the title screen, the demo's start and setting up its level well over 1,000 more,
     // and the new game starts a few frames after fire. The limits leave plenty of room.
     private const int MaxFramesToTheTrainerMenu = 3000;
@@ -34,21 +30,17 @@ public sealed class GameStarter
     private const int MaxFramesToTheDemo = 3000;
     private const int MaxFramesToTheNewGame = 250;
 
-    // The keyboard and the joystick are read about once per frame, so a press has to last a few frames to be seen.
+    // The keyboard is read about once per frame, so a press has to last a few frames to be seen.
     private const int PressFrames = 5;
 
-    private readonly StartPoint _newGame;
+    private readonly LibretroCore _core;
+    private readonly byte[] _newGame;
 
-    private GameStarter(StartPoint newGame, int frames)
+    private GameStarter(LibretroCore core, byte[] newGame)
     {
+        _core = core;
         _newGame = newGame;
-        StartFrames = frames;
     }
-
-    /// <summary>
-    /// The number of frames <see cref="Start"/> ran.
-    /// </summary>
-    public int StartFrames { get; }
 
     /// <summary>
     /// Runs the core flat out from a freshly loaded disk to the start of a new game, and remembers that moment.
@@ -61,15 +53,14 @@ public sealed class GameStarter
     public static GameStarter Start(LibretroCore core, bool unlimitedLives)
     {
         ArgumentNullException.ThrowIfNull(core);
-        var frames = 0;
 
-        RunUntil("the trainer menu's question about unlimited lives", () => ScreenText().Contains("UNLIMITED LIVES"),
+        RunUntil("the trainer menu's question about unlimited lives", () => ScreenShows("UNLIMITED LIVES"),
             MaxFramesToTheTrainerMenu);
         Type(unlimitedLives ? RetroKey.Y : RetroKey.N);
-        RunUntil("the question about invincibility", () => ScreenText().Contains("INVINCIBILITY"),
+        RunUntil("the question about invincibility", () => ScreenShows("INVINCIBILITY"),
             MaxFramesToTheNextQuestion);
         Type(RetroKey.N);
-        RunUntil("the note about the level skip", () => ScreenText().Contains("SKIPS"), MaxFramesToTheNextQuestion);
+        RunUntil("the note about the level skip", () => ScreenShows("SKIPS"), MaxFramesToTheNextQuestion);
         Type(RetroKey.Space);
 
         // Fire is only seen once the demo runs, not while it sets up its level.
@@ -77,40 +68,30 @@ public sealed class GameStarter
         RunUntil("the demo", () => reader.Update(core.SystemRam) == GamePhase.Demo && reader.MainLoopRunning,
             MaxFramesToTheDemo);
 
-        // Fire ends the demo. The new game starts when the game switches to play mode, with the demo's player still
-        // dead; it brings him back to life just before it loads the level, about 17 frames later. Fire, unlike a key,
-        // leaves nothing waiting to be read, so the level will wait for the player's first move.
+        // Fire ends the demo. The game can take some 20 frames to look at it, so it's held until the new game starts:
+        // when the game switches to play mode, with the demo's player still dead; it brings him back to life just
+        // before it loads the level, about 17 frames later. Fire, unlike a key, leaves nothing waiting to be read, so
+        // the level will wait for the player's first move.
         core.PressButton(RetroPadButton.B);
-        var fireDown = true;
-        var pressedFrames = 0;
-        RunUntil("the new game", () =>
-        {
-            if (fireDown && ++pressedFrames == PressFrames)
-            {
-                core.ReleaseButton(RetroPadButton.B);
-                fireDown = false;
-            }
-
-            return core.SystemRam[RamMap.GameMode] == 2;
-        }, MaxFramesToTheNewGame);
+        RunUntil("the new game", () => core.SystemRam[RamMap.GameMode] == 2, MaxFramesToTheNewGame);
 
         // Let go of fire and give the C64 a moment to see it, so the saved moment has no input, like every game
         // started from it (a load always starts with none, D15).
-        if (fireDown)
-            core.ReleaseButton(RetroPadButton.B);
-        RunFrames(2);
+        core.ReleaseButton(RetroPadButton.B);
+        core.RunFrames(2);
 
         if (core.SystemRam[RamMap.PlayerAlive] != 0)
             throw new InvalidOperationException("The new game was seen too late: its level is already being loaded.");
 
-        return new GameStarter(StartPoint.Save(core), frames);
+        return new GameStarter(core, core.SaveState());
+
+        bool ScreenShows(string text) => TextScreen.Read(core.SystemRam).Contains(text);
 
         void RunUntil(string what, Func<bool> condition, int maxFrames)
         {
             for (var frame = 0; frame < maxFrames; frame++)
             {
                 core.RunFrame();
-                frames++;
                 if (condition())
                     return;
             }
@@ -121,43 +102,20 @@ public sealed class GameStarter
         void Type(RetroKey key)
         {
             core.PressKey(key);
-            RunFrames(PressFrames);
+            core.RunFrames(PressFrames);
             core.ReleaseKey(key);
-            RunFrames(PressFrames);
-        }
-
-        void RunFrames(int count)
-        {
-            for (var i = 0; i < count; i++)
-            {
-                core.RunFrame();
-                frames++;
-            }
-        }
-
-        // The C64's 40×25 text screen at $0400 as one string, row after row. Screen codes 1-26 are A-Z and 32-63
-        // match ASCII; bit 7 only means the character is shown reversed.
-        string ScreenText()
-        {
-            var screen = core.SystemRam[0x0400..0x07E8];
-            var text = new char[screen.Length];
-            for (var i = 0; i < screen.Length; i++)
-            {
-                var code = screen[i] & 0x7F;
-                text[i] = code switch { < 32 => (char)('@' + code), < 64 => (char)code, _ => '#' };
-            }
-
-            return new string(text);
+            core.RunFrames(PressFrames);
         }
     }
 
     /// <summary>
-    /// Starts a new game at the given level of the game's own. The game then loads and sets up the level
-    /// from disk by itself, in about 640 frames, and waits for the player's first move.
+    /// Starts a new game at this level. The game sets the level up in about 490 frames and waits for the player's
+    /// first move.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Can be called any number of times; each call starts a new game from the moment <see cref="Start"/> saved.
+    /// Can be called any number of times; each call starts a new game from the moment <see cref="Start"/> saved. Games
+    /// started with the same level repeat exactly when given the same joystick input.
     /// </para>
     /// <para>
     /// It loads a state, so it lets go of all input (<see cref="LibretroCore.LoadState"/>, D15): press the first move
@@ -165,42 +123,30 @@ public sealed class GameStarter
     /// until that move, which has to be held until it's <see cref="GamePhase.Playing"/>: RAM doesn't show when the
     /// level is ready for it, and a short press can come too early.
     /// </para>
-    /// </remarks>
-    /// <param name="level">The level, 1 to <see cref="MaxLevel"/>.</param>
-    /// <exception cref="ArgumentOutOfRangeException">The level is outside 1 to <see cref="MaxLevel"/>.</exception>
-    public void StartLevel(int level)
-    {
-        _newGame.Start(LevelNumber(level));
-    }
-
-    /// <summary>
-    /// Starts a new game at a level of our own, for example one from the disk with changes, or a made-up one. The
-    /// game doesn't read the disk; it sets the level up in about 490 frames and waits for the player's first move.
-    /// </summary>
-    /// <remarks>
     /// <para>
-    /// Otherwise like <see cref="StartLevel(int)"/>, but games started this way repeat exactly when given the same
-    /// joystick input; reading the disk doesn't.
-    /// </para>
-    /// <para>
-    /// The level stays as given also after the player dies. The next one comes from the disk.
+    /// The level stays as given also after the player dies. The next one is loaded from the disk by the game.
     /// </para>
     /// </remarks>
-    public void StartLevel(LevelData level)
+    /// <param name="level">
+    /// A level with the player in it: one from the disk, with changes or without, or a made-up one.
+    /// </param>
+    /// <exception cref="InvalidOperationException">The level has a tile the game can't store.</exception>
+    public void StartLevel(Level level)
     {
         ArgumentNullException.ThrowIfNull(level);
-        _newGame.Start(LevelNumber(level.Number)
-            .Write(RamMap.LevelBuffer, level.ToBytes())
-            .Write(RamMap.LevelInBuffer, (byte)(level.Number - 1)));
+        GoToStartOfNewGame();
+        PutInGame(level);
     }
 
-    private static RamPatch LevelNumber(int level)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThan(level, 1);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(level, MaxLevel);
+    private void GoToStartOfNewGame() => _core.LoadState(_newGame);
 
-        return RamPatch.Empty
-            .Write(RamMap.LevelNumberOnDisk, (byte)(level - 1))
-            .Write(RamMap.LevelNumber, (byte)level);
+    // The game is about to set up a level. These are the level's tiles and number, where the game looks for them; it
+    // has the number in three places, and counts from 0 in two of them.
+    private void PutInGame(Level level)
+    {
+        _core.WriteSystemRam(RamMap.LevelBuffer, level.ToBytes());
+        _core.WriteSystemRam(RamMap.LevelNumber, [(byte)level.Number]);
+        _core.WriteSystemRam(RamMap.LevelNumberOnDisk, [(byte)(level.Number - 1)]);
+        _core.WriteSystemRam(RamMap.LevelInBuffer, [(byte)(level.Number - 1)]);
     }
 }

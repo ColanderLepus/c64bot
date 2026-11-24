@@ -4,9 +4,8 @@ namespace C64Bot.LodeRunner;
 /// What a tile of the level is, with the game's own codes for it.
 /// </summary>
 /// <remarks>
-/// The grid as built only holds these. The game's codes 6 (hidden exit ladder), 8 (guard) and 9 (player) are only in
-/// the level as stored on disk, and are taken out when the level starts. A value that isn't one of these is kept as
-/// it is, so it can be spotted.
+/// A level from the running game has no hidden ladders, guards or player among its tiles (see <see cref="Level"/>). A
+/// value that isn't one of these is kept as it is, so it can be spotted.
 /// </remarks>
 public enum Tile : byte
 {
@@ -34,5 +33,20 @@ public enum Tile : byte
     /// </summary>
     TrapBrick = 5,
 
+    /// <summary>
+    /// An exit ladder that only appears once all gold is taken.
+    /// </summary>
+    HiddenLadder = 6,
+
     Gold = 7,
+
+    /// <summary>
+    /// Where a guard starts.
+    /// </summary>
+    Guard = 8,
+
+    /// <summary>
+    /// Where the player starts.
+    /// </summary>
+    Player = 9,
 }

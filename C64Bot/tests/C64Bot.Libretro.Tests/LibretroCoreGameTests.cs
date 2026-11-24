@@ -57,9 +57,9 @@ public class LibretroCoreGameTests(LodeRunnerAtTheTrainerMenu lodeRunner)
 
         // Act
         core.PressKey(RetroKey.Y);
-        RunFrames(5);
+        core.RunFrames(5);
         core.ReleaseKey(RetroKey.Y);
-        RunFrames(5);
+        core.RunFrames(5);
 
         // Assert
         Assert.Contains("TOTAL INVINCIBILITY (Y/N) ?", lodeRunner.ScreenText());
@@ -92,11 +92,5 @@ public class LibretroCoreGameTests(LodeRunnerAtTheTrainerMenu lodeRunner)
 
         // Assert
         Assert.IsType<ArgumentOutOfRangeException>(exception);
-    }
-
-    private void RunFrames(int frames)
-    {
-        for (var i = 0; i < frames; i++)
-            lodeRunner.Core.RunFrame();
     }
 }

@@ -9,6 +9,9 @@ namespace C64Bot.LodeRunner;
 /// </remarks>
 public static class RamMap
 {
+    // The grids' rows are as long as a level is wide.
+    private const int BytesPerRow = 28;
+
     // The level.
 
     /// <summary>
@@ -36,7 +39,7 @@ public static class RamMap
     public const int HiddenLadderCount = 0x1301;
 
     /// <summary>
-    /// The level buffer: the level as stored, in <see cref="LevelData.ByteCount"/> bytes. The game sets the level up
+    /// The level buffer: the level as stored, in <see cref="Level.ByteCount"/> bytes. The game sets the level up
     /// from here, and again after a death.
     /// </summary>
     public const int LevelBuffer = 0x1000;
@@ -195,5 +198,5 @@ public static class RamMap
     /// <param name="column">0–27, from the left.</param>
     /// <param name="row">0–15, from the top.</param>
     public static int TileAddress(int grid, int column, int row) =>
-        grid + Level.Width * row + (row >= 9 ? 4 : 0) + column;
+        grid + BytesPerRow * row + (row >= 9 ? 4 : 0) + column;
 }

@@ -14,7 +14,6 @@ namespace C64Bot.LodeRunner;
 /// </remarks>
 public sealed class GameState
 {
-    private const byte PlayerTile = 9;
     private const byte AllGoldTaken = 0xFF;
 
     private GameState(
@@ -24,7 +23,6 @@ public sealed class GameState
         Player = player;
         Guards = guards;
         Holes = holes;
-        LevelNumber = ram[RamMap.LevelNumber];
         Lives = ram[RamMap.Lives];
         Score = ReadScore(ram);
 
@@ -46,9 +44,6 @@ public sealed class GameState
     /// The holes the player has dug that are still open.
     /// </summary>
     public IReadOnlyList<Hole> Holes { get; }
-
-    /// <summary>The level's number, 1–150.</summary>
-    public int LevelNumber { get; }
 
     public int Lives { get; }
 
@@ -77,7 +72,7 @@ public sealed class GameState
             return false;
 
         var (column, row) = player.Position;
-        if (ram[RamMap.TileAddress(RamMap.LevelAsPlayed, column, row)] != PlayerTile)
+        if (ram[RamMap.TileAddress(RamMap.LevelAsPlayed, column, row)] != (byte)Tile.Player)
             return false;
 
         var guards = Guard.ReadAll(ram);
