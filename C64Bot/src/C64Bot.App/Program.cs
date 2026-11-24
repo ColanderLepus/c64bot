@@ -7,13 +7,22 @@ using C64Bot.LodeRunner;
 const string CorePath = @"C:\Tools\C64\libretro\vice_x64sc_libretro.dll";
 const string DiskPath = @"C:\Emulation\ROMs\C64\Lode Runner.d64";
 
-// The level to start at can be given on the command line; level 1 if not.
+// The level to start at can be given on the command line; level 1 if not. "noguards" after it leaves out the level's
+// guards, for development (D17).
 var level = 1;
 if (args.Length > 0 && (!int.TryParse(args[0], out level) || level is < 1 or > GameStarter.MaxLevel))
 {
     Console.WriteLine($"Give a level from 1 to {GameStarter.MaxLevel}, not '{args[0]}'.");
     return;
 }
+
+if (args.Length > 2 || (args.Length == 2 && args[1] != "noguards"))
+{
+    Console.WriteLine($"Only 'noguards' can follow the level, not '{string.Join(' ', args[1..])}'.");
+    return;
+}
+
+var withGuards = args.Length < 2;
 
 // The core keeps its own files next to its DLL. Its log lines are only format strings without their values (see
 // LibretroCore's OnLog), so they're left out.
@@ -32,8 +41,11 @@ Console.WriteLine(
 var startTime = System.Diagnostics.Stopwatch.StartNew();
 var starter = GameStarter.Start(core, unlimitedLives: true);
 Console.WriteLine($"At the start of a new game after {starter.StartFrames:N0} frames, {startTime.Elapsed.TotalSeconds:F1} s.");
-starter.StartLevel(level);
-Console.WriteLine($"Starting level {level}.");
+if (withGuards)
+    starter.StartLevel(level);
+else
+    starter.StartLevel(LevelData.FromDisk(DiskImage.Load(DiskPath), level).WithoutGuards());
+Console.WriteLine($"Starting level {level}{(withGuards ? "" : " without its guards")}.");
 
 // The window runs on a thread of its own: WPF needs a single-threaded apartment (STA) thread, and this way the
 // emulation loop below never waits for the window. The window's keys come back the other way, through a queue.

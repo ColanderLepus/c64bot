@@ -35,6 +35,18 @@ public static class RamMap
 
     public const int HiddenLadderCount = 0x1301;
 
+    /// <summary>
+    /// The level buffer: the level as stored, in <see cref="LevelData.ByteCount"/> bytes. The game sets the level up
+    /// from here, and again after a death.
+    /// </summary>
+    public const int LevelBuffer = 0x1000;
+
+    /// <summary>
+    /// The level held in <see cref="LevelBuffer"/>, numbered as on disk. When a level is set up, the game reads it
+    /// from disk only if this isn't <see cref="LevelNumberOnDisk"/>.
+    /// </summary>
+    public const int LevelInBuffer = 0x133B;
+
     // The player.
 
     /// <summary>The player's column, 0–27.</summary>

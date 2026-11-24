@@ -9,13 +9,17 @@ namespace C64Bot.LodeRunner;
 /// <remarks>
 /// <para>
 /// <see cref="Start"/> runs the core flat out through loading, the trainer menu and the title screen into the demo,
-/// presses fire, and saves a state at the first frame of the new game. That frame falls in a short window: the game
-/// has set the level to 1 and switched to play mode, but hasn't loaded the level from disk yet.
+/// presses fire, and saves the first frame of the new game (a <see cref="StartPoint"/>). That frame falls in a short
+/// window: the game has set the level to 1 and switched to play mode, but hasn't loaded the level from disk yet.
 /// </para>
 /// <para>
-/// <see cref="StartLevel"/> loads that state and writes the wanted level number into RAM, so the game loads that
-/// level itself. Lives and score are those of a new game, unlike when levels are skipped with C=. This is the only
-/// place the bot writes the game's RAM (D13).
+/// <see cref="StartLevel(int)"/> starts from there and writes the wanted level number into RAM, so the game loads
+/// that level from disk by itself. Lives and score are those of a new game, unlike when levels are skipped with C=.
+/// <see cref="StartLevel(LevelData)"/> also writes the level, so it can be any level, with any changes.
+/// </para>
+/// <para>
+/// This is a tool for development and tests, and the only code that writes the game's RAM (D13). The bot itself
+/// plays a running game and knows nothing about it (D17).
 /// </para>
 /// </remarks>
 public sealed class GameStarter
@@ -33,12 +37,10 @@ public sealed class GameStarter
     // The keyboard and the joystick are read about once per frame, so a press has to last a few frames to be seen.
     private const int PressFrames = 5;
 
-    private readonly LibretroCore _core;
-    private readonly byte[] _newGame;
+    private readonly StartPoint _newGame;
 
-    private GameStarter(LibretroCore core, byte[] newGame, int frames)
+    private GameStarter(StartPoint newGame, int frames)
     {
-        _core = core;
         _newGame = newGame;
         StartFrames = frames;
     }
@@ -101,7 +103,7 @@ public sealed class GameStarter
         if (core.SystemRam[RamMap.PlayerAlive] != 0)
             throw new InvalidOperationException("The new game was seen too late: its level is already being loaded.");
 
-        return new GameStarter(core, core.SaveState(), frames);
+        return new GameStarter(StartPoint.Save(core), frames);
 
         void RunUntil(string what, Func<bool> condition, int maxFrames)
         {
@@ -150,8 +152,8 @@ public sealed class GameStarter
     }
 
     /// <summary>
-    /// Starts a new game at the given level. The game then loads and sets up the level by itself, in about 640
-    /// frames, and waits for the player's first move.
+    /// Starts a new game at the given level of the game's own. The game then loads and sets up the level
+    /// from disk by itself, in about 640 frames, and waits for the player's first move.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -168,11 +170,37 @@ public sealed class GameStarter
     /// <exception cref="ArgumentOutOfRangeException">The level is outside 1 to <see cref="MaxLevel"/>.</exception>
     public void StartLevel(int level)
     {
+        _newGame.Start(LevelNumber(level));
+    }
+
+    /// <summary>
+    /// Starts a new game at a level of our own, for example one from the disk with changes, or a made-up one. The
+    /// game doesn't read the disk; it sets the level up in about 490 frames and waits for the player's first move.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Otherwise like <see cref="StartLevel(int)"/>, but games started this way repeat exactly when given the same
+    /// joystick input; reading the disk doesn't.
+    /// </para>
+    /// <para>
+    /// The level stays as given also after the player dies. The next one comes from the disk.
+    /// </para>
+    /// </remarks>
+    public void StartLevel(LevelData level)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        _newGame.Start(LevelNumber(level.Number)
+            .Write(RamMap.LevelBuffer, level.ToBytes())
+            .Write(RamMap.LevelInBuffer, (byte)(level.Number - 1)));
+    }
+
+    private static RamPatch LevelNumber(int level)
+    {
         ArgumentOutOfRangeException.ThrowIfLessThan(level, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(level, MaxLevel);
 
-        _core.LoadState(_newGame);
-        _core.WriteSystemRam(RamMap.LevelNumberOnDisk, [(byte)(level - 1)]);
-        _core.WriteSystemRam(RamMap.LevelNumber, [(byte)level]);
+        return RamPatch.Empty
+            .Write(RamMap.LevelNumberOnDisk, (byte)(level - 1))
+            .Write(RamMap.LevelNumber, (byte)level);
     }
 }
