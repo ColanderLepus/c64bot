@@ -61,9 +61,9 @@ public sealed class Route
     /// <para>
     /// A route to gold is a trap if, from where it ends, he can no longer get to gold he could get to at its start, or
     /// to the top row once the exit ladders are there (<see cref="LevelGraph.WithinReach"/>), or if a short search from
-    /// there, of up to 2,000 places, runs out of places to look at without finding a way on. Then the search goes on
-    /// to the next route: to other gold, or to the same gold another way. It doesn't look further ahead than that, so a
-    /// trap that only shows once more gold is taken isn't seen.
+    /// there, of up to 2,000 places, runs out of places to look at without finding a way on that isn't a trap in the
+    /// same way. Then the search goes on to the next route: to other gold, or to the same gold another way. It doesn't
+    /// look further ahead than that, so a trap that only shows two gold later isn't seen.
     /// </para>
     /// <para>
     /// To keep the search small, a place he has been at already, with the same holes open, isn't looked at again,
@@ -81,21 +81,107 @@ public sealed class Route
         if (start.Guards.Count > 0)
             throw new NotSupportedException("The rules don't have guards yet.");
 
-        return Search(start, new LevelGraph(start), MaxPlaces, lookOut: true).Route;
+        var graph = new LevelGraph(start);
+        return SearchTheGraph(start, graph) ?? Search(start, graph, MaxPlaces, searchOn: true).Route;
     }
 
     public override string ToString() => $"{Moves.Count} moves, {Passes.Count} passes: {string.Join("; ", Moves)}";
 
+    // Searches the graph for a route from place to place, along runs and through digs he drops straight through, which
+    // takes no time at all. The graph has no holes, so each route found is played pass by pass by the game's rules: it's
+    // only taken if every move ends where it does in the graph. And it's checked for traps as Find says. Gives null if
+    // none is found that way.
+    private static Route? SearchTheGraph(GameState start, LevelGraph graph)
+    {
+        var at = start.Player.Position;
+        if (start.Player is not { OffsetX: 0, OffsetY: 0 } || !graph.IsPlace(at))
+            return null;
+
+        // The quickest way to each place, and the runs that reach gold, or complete the level, from there.
+        var passes = new Dictionary<TilePosition, int> { [at] = 0 };
+        var cameBy = new Dictionary<TilePosition, Run>();
+        var goals = new List<(int Passes, Run Run)>();
+        var next = new PriorityQueue<TilePosition, int>();
+        next.Enqueue(at, 0);
+        while (next.TryDequeue(out var place, out var sofar))
+        {
+            if (sofar > passes[place])
+                continue;
+
+            foreach (var run in graph.RunsFrom(place))
+            {
+                var then = sofar + run.Passes.Count;
+                if (IsAGoal(run))
+                {
+                    goals.Add((then, run));
+                    continue;
+                }
+
+                if (passes.TryGetValue(run.To, out var known) && known <= then)
+                    continue;
+
+                (passes[run.To], cameBy[run.To]) = (then, run);
+                next.Enqueue(run.To, then);
+            }
+        }
+
+        var withinReach = graph.WithinReach(start);
+        var traps = start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn: true) : null;
+        foreach (var (_, last) in goals.OrderBy(goal => goal.Passes))
+        {
+            var runs = new List<Run> { last };
+            for (var from = last.From; from != at; from = cameBy[from].From)
+                runs.Insert(0, cameBy[from]);
+
+            if (Played(start, runs) is { } route && (traps is null || !traps.IsTrapped(route.End)))
+                return route;
+        }
+
+        return null;
+
+        bool IsAGoal(Run run) =>
+            start.GoldLeft > 0
+                ? Enumerable.Range(0, run.Moves.Count).Any(move => run.TilesOn(move).Any(tile => start.Level[tile] == Tile.Gold))
+                : run.Moves[^1].End.Completed;
+    }
+
+    // The route that playing the runs gives, pass by pass, by the game's rules, up to where he takes gold or completes
+    // the level. Null if a move doesn't end where it does in the graph, as when a hole he dropped through is in the way.
+    private static Route? Played(GameState start, List<Run> runs)
+    {
+        var moves = new List<Move>();
+        var state = start;
+        foreach (var known in runs.SelectMany(run => run.Moves))
+        {
+            // A dig is worked out afresh: which way fire digs depends on his last step left or right.
+            var move = known.Kind is MoveKind.DigLeft or MoveKind.DigRight
+                ? Move.AllFrom(state).FirstOrDefault(move => move.Kind == known.Kind)
+                : Move.Replay(state, known);
+            if (move is null || move.End.Player.Position != known.End.Player.Position
+                || (move.End.Player.OffsetX, move.End.Player.OffsetY) != (known.End.Player.OffsetX, known.End.Player.OffsetY))
+            {
+                return null;
+            }
+
+            moves.Add(move);
+            state = move.End;
+            if (start.GoldLeft > 0 ? state.GoldLeft < start.GoldLeft : state.Completed)
+                return new Route(moves);
+        }
+
+        return null;
+    }
+
     // Searches as Find says, on a graph of the level as it is in the state, and gives up after so many places. Without
-    // looking out, it takes the first route it finds, trap or not.
-    private static (Route? Route, bool GaveUp) Search(GameState start, LevelGraph graph, int maxPlaces, bool lookOut)
+    // searching on, it only rules out a route as a trap with WithinReach.
+    private static (Route? Route, bool GaveUp) Search(GameState start, LevelGraph graph, int maxPlaces, bool searchOn)
     {
         var withinReach = graph.WithinReach(start);
         var estimate = new Estimate(start, withinReach);
         if (estimate.LeastPasses(start) is not { } least)
             return (null, false);
 
-        var traps = lookOut && start.GoldLeft > 0 ? new Traps(start, graph, withinReach) : null;
+        var traps = start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn) : null;
         var earliest = new Dictionary<Place, int> { [Place.Of(start)] = 0 };
         var routes = new PriorityQueue<Step, (int Passes, int Taken)>();
         routes.Enqueue(new Step(start, null, null, 0), (Weight * least, 0));
@@ -160,9 +246,9 @@ public sealed class Route
     // Whether, where a route that takes gold ends, he can no longer get to gold he could get to at its start, or to the
     // top row once the exit ladders are there, if he could at the start. Gold or a way out that he couldn't get to at
     // the start doesn't count: no route can change that. Worked out with WithinReach, which never leaves out a tile he
-    // can get to. And whether a short search from there runs out of places to look at without finding a way on. So a
-    // route ruled out is a trap for sure.
-    private sealed class Traps(GameState start, LevelGraph graph, IReadOnlySet<TilePosition> withinReach)
+    // can get to. And, searching on, whether a short search from there runs out of places to look at without finding a
+    // way on that isn't a trap by WithinReach. So a route ruled out is a trap for sure.
+    private sealed class Traps(GameState start, LevelGraph graph, IReadOnlySet<TilePosition> withinReach, bool searchOn)
     {
         private readonly TilePosition[] _gold = [.. GoldIn(start.Level).Where(withinReach.Contains)];
         private LevelGraph? _withExitLadders;
@@ -190,10 +276,10 @@ public sealed class Route
 
             // On to the rest he could get to at the start, if there's any.
             var more = end.GoldLeft > 0 ? _gold.Any(gold => end.Level[gold] == Tile.Gold) : _wayOut;
-            if (end.Completed || !more)
+            if (!searchOn || end.Completed || !more)
                 return false;
 
-            var onward = Search(end, end.GoldLeft > 0 ? graph : _withExitLadders, OnwardPlaces, lookOut: false);
+            var onward = Search(end, end.GoldLeft > 0 ? graph : _withExitLadders, OnwardPlaces, searchOn: false);
             return onward is { Route: null, GaveUp: false };
         }
 

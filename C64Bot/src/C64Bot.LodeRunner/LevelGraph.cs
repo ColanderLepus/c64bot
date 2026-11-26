@@ -11,7 +11,8 @@ namespace C64Bot.LodeRunner;
 /// stands on a floor, is on a ladder, or hangs from a rope. A run goes from a place one way, left, right, up or down,
 /// to the next place where he can do more than carry on that way or turn back: where a ladder or a rope starts or
 /// ends, where he can climb down or let go, at gold, against a wall, or where a fall lands him. On the way he passes
-/// places where all he can do is carry on, turn back, or dig.
+/// places where all he can do is carry on, turn back, or dig. A dig is a run too, where he drops straight through the
+/// hole: from the place he digs from, to the place where he lands.
 /// </para>
 /// <para>
 /// It's worked out with the game's rules (<see cref="Move"/>, built on <see cref="GameState.Next"/>) on the level as it
@@ -37,6 +38,7 @@ public sealed class LevelGraph
         // Each place, with its moves on the level without holes and gold.
         var level = state.Level.Replace(Tile.Gold, Tile.Empty);
         var moves = new Dictionary<TilePosition, Dictionary<MoveKind, (Move Move, TilePosition[] Tiles)>>();
+        var digs = new List<(TilePosition Place, GameState There, Move Dig)>();
         for (var row = 0; row < Level.Height; row++)
         {
             for (var column = 0; column < Level.Width; column++)
@@ -50,20 +52,35 @@ public sealed class LevelGraph
                 if (there.Next(Joystick.None).Player.Falling)
                     continue;
 
-                moves[position] = Move.AllFrom(there)
+                var all = Move.AllFrom(there);
+                moves[position] = all
                     .Where(move => Ways.Contains(move.Kind))
                     .ToDictionary(move => move.Kind, move => (move, TilesOn(there, move)));
+                digs.AddRange(all.Where(move => move.Kind is MoveKind.DigLeft or MoveKind.DigRight)
+                    .Select(dig => (position, there, dig)));
             }
         }
 
         foreach (var (place, from) in moves)
             _runs[place] = [.. from.Keys.Select(way => Follow(place, way, moves, state.Level))];
+
+        // A dig, and the step that way that drops him through the hole, to where he lands, if that's a place.
+        foreach (var (place, there, dig) in digs)
+        {
+            var way = dig.Kind == MoveKind.DigLeft ? MoveKind.Left : MoveKind.Right;
+            if (Move.AllFrom(dig.End).FirstOrDefault(move => move.Kind == way) is { End.Player: { OffsetX: 0, OffsetY: 0 } lands } drop
+                && moves.ContainsKey(lands.Position) && lands.Position.Row > place.Row)
+            {
+                _runs[place] = [.. _runs[place], new Run(place, dig.Kind, [dig, drop], [TilesOn(there, dig), TilesOn(dig.End, drop)])];
+            }
+        }
     }
 
     public IReadOnlyCollection<TilePosition> Places => _runs.Keys;
 
     /// <summary>
-    /// Gives the runs from a place, one for each way he can go from there; none if it's not a place.
+    /// Gives the runs from a place, one for each way he can go from there, and one for each dig he can drop straight
+    /// through; none if it's not a place.
     /// </summary>
     public IReadOnlyList<Run> RunsFrom(TilePosition place) => _runs.GetValueOrDefault(place, []);
 
@@ -82,6 +99,9 @@ public sealed class LevelGraph
     /// he can go either way, as if they were there and as if they weren't.
     /// </remarks>
     public IReadOnlySet<TilePosition> WithinReach(GameState state) => new Reach(this, state).Tiles;
+
+    // Whether it's a place in the graph: the middle of a tile where something holds him.
+    internal bool IsPlace(TilePosition tile) => _runs.ContainsKey(tile);
 
     // He stands, hangs or climbs in the middle of the tile, as when a move ends there.
     private static GameState StateAt(GameState state, Level level, TilePosition position) => new(

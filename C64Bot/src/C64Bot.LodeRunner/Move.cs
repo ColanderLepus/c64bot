@@ -74,6 +74,18 @@ public sealed class Move
         return [.. moves.OfType<Move>()];
     }
 
+    // The move that holding the joystick as in a known one gives from this state. Null if it doesn't end where the
+    // joystick decides again, or he dies.
+    internal static Move? Replay(GameState start, Move known)
+    {
+        var moving = new Moving(start);
+        foreach (var joystick in known.Passes)
+            moving.Pass(joystick);
+
+        var end = moving.State;
+        return end.Alive && (end.Completed || JoystickDecides(end)) ? moving.ToMove(known.Kind) : null;
+    }
+
     public override string ToString() =>
         $"{Kind}, {Passes.Count} passes, to {End.Player.Position.Column},{End.Player.Position.Row}";
 

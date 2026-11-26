@@ -25,13 +25,14 @@ public sealed class Run
 
     /// <summary>
     /// Which way he goes: <see cref="MoveKind.Left"/>, <see cref="MoveKind.Right"/>, <see cref="MoveKind.Up"/> or
-    /// <see cref="MoveKind.Down"/>.
+    /// <see cref="MoveKind.Down"/>, or for a dig he drops through, <see cref="MoveKind.DigLeft"/> or
+    /// <see cref="MoveKind.DigRight"/>.
     /// </summary>
     public MoveKind Way { get; }
 
     /// <summary>
     /// The moves of the run, one tile after another, as they are in the level without holes and gold. Each but the
-    /// last ends at a place he passes on the way.
+    /// last ends at a place he passes on the way. For a dig, the dig and the step that drops him through the hole.
     /// </summary>
     public IReadOnlyList<Move> Moves { get; }
 

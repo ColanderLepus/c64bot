@@ -3,6 +3,7 @@
     <Project Path="src/C64Bot.App/C64Bot.App.csproj" />
     <Project Path="src/C64Bot.Libretro/C64Bot.Libretro.csproj" />
     <Project Path="src/C64Bot.LodeRunner/C64Bot.LodeRunner.csproj" />
+    <Project Path="src/C64Bot.Tools/C64Bot.Tools.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/C64Bot.Libretro.Tests/C64Bot.Libretro.Tests.csproj" />

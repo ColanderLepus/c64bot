@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Pictures written by C64Bot.Tools
+pictures/

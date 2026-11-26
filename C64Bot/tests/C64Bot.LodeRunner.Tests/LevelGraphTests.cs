@@ -139,6 +139,42 @@ public class LevelGraphTests
     }
 
     [Fact]
+    public void RunsFrom_BesideABrickWithRoomBelow_DigsAndDropsThroughIt()
+    {
+        // Arrange
+        var graph = new LevelGraph(State("""
+            P
+            @#@
+            @ @
+            @@@
+            """));
+
+        // Act
+        var dig = Assert.Single(graph.RunsFrom(new TilePosition(0, 0)), run => run.Way == MoveKind.DigRight);
+
+        // Assert
+        Assert.Equal(new TilePosition(1, 2), dig.To);
+        Assert.Equal([MoveKind.DigRight, MoveKind.Right], dig.Moves.Select(move => move.Kind));
+    }
+
+    [Fact]
+    public void RunsFrom_BesideABrickOnASolidBlock_DoesntDigWhereHedStayInTheHole()
+    {
+        // Arrange
+        var graph = new LevelGraph(State("""
+            P
+            @#@
+            @@@
+            """));
+
+        // Act
+        var runs = graph.RunsFrom(new TilePosition(0, 0));
+
+        // Assert
+        Assert.DoesNotContain(runs, run => run.Way is MoveKind.DigLeft or MoveKind.DigRight);
+    }
+
+    [Fact]
     public void RunsFrom_NotAPlace_GivesNone()
     {
         // Arrange

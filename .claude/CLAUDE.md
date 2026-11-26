@@ -39,6 +39,8 @@ dotnet test C64Bot                           # run all tests (under a minute)
 dotnet run --project C64Bot/src/C64Bot.App          # run the app: starts a new game at level 1 and opens its window
 dotnet run --project C64Bot/src/C64Bot.App -- 5     # the same, at level 5 (1-150)
 dotnet run --project C64Bot/src/C64Bot.App -- 5 noguards    # level 5 without its guards (for development, D17)
+dotnet run --project C64Bot/src/C64Bot.Tools -- picture level.txt # a level or state as text (see LevelPicture) to level.png; nothing is run
+dotnet run --project C64Bot/src/C64Bot.Tools -- pictures 17  # level 17 without guards, played by the planner: pictures in pictures\level17
 
 # The VICE program, for exploring by hand (its monitor and debugger):
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe                                                         # at the BASIC READY. prompt

@@ -302,6 +302,91 @@ public class RouteTests
     }
 
     [Fact]
+    public void Find_RouteAfterRoute_TakesTheGoldInABoxBesideALadderAndGetsOut()
+    {
+        // Arrange: the box on the right of level 17. Each gold in it is a trap if he digs in the wrong way, which only
+        // shows at the gold after it.
+        var state = State("""
+                     h
+                     h
+                     h
+            #########H
+            #########H
+            ##       H
+            ##       H
+            ##  #####H
+            ##  ##$##H
+            ##P #####H
+            ##  ##$##H
+            ##  #####H
+            ##       H
+            ##    $  H
+            ##H#######
+              H#######
+            """, goldLeft: 3);
+
+        // Act
+        while (!state.Completed && Route.Find(state) is { } route)
+            state = route.End;
+
+        // Assert
+        Assert.True(state.Completed);
+    }
+
+    [Fact]
+    public void Find_GoldUnderABrickAfterALongWalk_DigsAndDropsThroughOnTheWay()
+    {
+        // Arrange
+        var state = State("""
+            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+                                       P
+            ############################
+            @$@@@@@@@@@@@@@@@@@@@@@@@@@@
+            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+            """, goldLeft: 1);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal((1, 3, 0, 0), Place(route.End));
+        Assert.Single(route.Moves, move => move.Kind is MoveKind.DigLeft or MoveKind.DigRight);
+    }
+
+    [Fact]
+    public void Find_LongWayRoundOverBricksWithADigOnTheWay_IsFound()
+    {
+        // Arrange: level 17 without guards, after 7 gold. On the way to the gold on the left, which goes down, through
+        // the floor and up the ladder on the right, he could dig at every tile, which drowns a search move by move.
+        var state = State("""
+            h                          h
+            h                          h
+            h                          h
+            H###T############oo########H
+            H###T############o#########H
+            H   $   ##--------##       H
+            H       $#H      P##       H
+            H  ###  ##H ########  #####H
+            H  #$#  ##H       ##  ## ##H
+            H       ##H       ##  #####H
+            H  ###  ########HH##  ## ##H
+            H  ###  ########HH##  #####H
+            H  ###  ##      H ##       H
+            H  ###  ##      H ##       H
+            ##########H#########H#######
+            #######   H######   H#######
+            """, goldLeft: 3);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal(2, route.End.GoldLeft);
+    }
+
+    [Fact]
     public void Find_LastGoldInAPitWithNoWayOut_GivesNone()
     {
         // Arrange
