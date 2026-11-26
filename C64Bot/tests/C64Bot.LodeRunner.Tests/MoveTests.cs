@@ -370,6 +370,24 @@ public class MoveTests
     }
 
     [Fact]
+    public void AllFrom_JustBelowTheMiddleOfTheTopRowWithNoGoldLeft_EachMoveCompletesTheLevel()
+    {
+        // Arrange
+        var state = State("""
+            P
+            ##
+            """, offsetY: 1, goldLeft: 0);
+
+        // Act
+        var moves = Move.AllFrom(state);
+
+        // Assert
+        Assert.NotEmpty(moves);
+        Assert.All(moves, move => Assert.True(move.End.Completed));
+        Assert.All(moves, move => Assert.Single(move.Passes));
+    }
+
+    [Fact]
     public void AllFrom_WithNothingHoldingHim_IsAFallWhateverTheJoystick()
     {
         // Arrange

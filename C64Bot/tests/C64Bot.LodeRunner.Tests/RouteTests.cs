@@ -29,11 +29,11 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-            P
-            @#@
-            @$@
-            @@@
-            """);
+            P  @h
+            @#@@h
+            @$  h
+            @@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -42,7 +42,7 @@ public class RouteTests
         Assert.NotNull(route);
         Assert.Equal([MoveKind.DigRight, MoveKind.Right], route.Moves.Select(move => move.Kind));
         Assert.Equal((1, 2, 0, 0), Place(route.End));
-        Assert.Equal(8, route.End.GoldLeft);
+        Assert.Equal(0, route.End.GoldLeft);
     }
 
     [Fact]
@@ -50,13 +50,13 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-             P
-            ############################
-            ############################
-            ############################
-            @@@@$@@@@@@@@@@@@@@@@@@@@@@@
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            """);
+             P   @h
+            #####@h
+            #####@h
+            #####@h
+            @@@@$ h
+            @@@@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -64,7 +64,7 @@ public class RouteTests
         // Assert
         Assert.NotNull(route);
         Assert.Equal((4, 4, 0, 0), Place(route.End));
-        Assert.Equal(8, route.End.GoldLeft);
+        Assert.Equal(0, route.End.GoldLeft);
         Assert.Equal(
             [new(4, 1), new(3, 1), new(2, 1), new(4, 2), new(3, 2), new(4, 3)], HolesDug(state, route));
     }
@@ -74,13 +74,13 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-             P
-            ############################
-            ###@########################
-            ############################
-            @@@@$@@@@@@@@@@@@@@@@@@@@@@@
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            """);
+             P      @h
+            ########@h
+            ###@####@h
+            #####@@@@h
+            @@@@$    h
+            @@@@@@@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -98,14 +98,14 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-             P
-            ############################
-            ############################
-            ############################
-            ############################
-            @@@@@$@@@@@@@@@@@@@@@@@@@@@@
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            """);
+             P    @h
+            ######@h
+            ######@h
+            ######@h
+            ######@h
+            @@@@@$ h
+            @@@@@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -113,7 +113,7 @@ public class RouteTests
         // Assert
         Assert.NotNull(route);
         Assert.Equal((5, 5, 0, 0), Place(route.End));
-        Assert.Equal(8, route.End.GoldLeft);
+        Assert.Equal(0, route.End.GoldLeft);
         var holes = HolesDug(state, route);
         Assert.Equal([1, 1, 1, 1, 2, 2, 2, 3, 3, 4], holes.Select(hole => hole.Row));
         foreach (var layer in holes.GroupBy(hole => hole.Row))
@@ -129,12 +129,12 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-            H-  @
-            HP#@@
-            @@#@@
-            @@$@@
-            @@@@@
-            """);
+            H-  @h
+            HP#@@h
+            @@#@@h
+            @@$  h
+            @@@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -150,14 +150,14 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-             P
-            @H##########################
-            @H##########################
-            @H##########################
-            @@##########################
-            @@$@@@@@@@@@@@@@@@@@@@@@@@@@
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            """);
+             P  @h
+            @H##@h
+            @H##@h
+            @H##@h
+            @@#@@h
+            @@$  h
+            @@@@@@
+            """, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -174,11 +174,11 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-            P- @
-              #@
-            @@$@
-            @@@@
-            """, on: Tile.Rope);
+            P- @h
+              #@h
+            @@$ h
+            @@@@@
+            """, on: Tile.Rope, goldLeft: 1);
 
         // Act
         var route = Route.Find(state);
@@ -231,6 +231,92 @@ public class RouteTests
         Assert.True(route.End.Completed);
         Assert.Equal((2, 0, 0, 0), Place(route.End));
         Assert.Equal(20, route.Passes.Count);
+    }
+
+    [Fact]
+    public void Find_NearestGoldIsInAPitHeCantGetOutOf_TakesTheOtherFirst()
+    {
+        // Arrange
+        var state = State(PitWithAWayOutOnlyAtTheEnd, goldLeft: 2);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal((10, 1, 0, 0), Place(route.End));
+    }
+
+    [Fact]
+    public void Find_RouteAfterRoute_TakesAllTheGoldAndCompletesTheLevel()
+    {
+        // Arrange
+        var state = State(PitWithAWayOutOnlyAtTheEnd, goldLeft: 2);
+        var ends = new List<(int, int, int, int)>();
+
+        // Act
+        while (!state.Completed && Route.Find(state) is { } route)
+        {
+            state = route.End;
+            ends.Add(Place(state));
+        }
+
+        // Assert
+        Assert.True(state.Completed);
+        Assert.Equal([(10, 1, 0, 0), (2, 3, 0, 0), (1, 0, 0, 0)], ends);
+    }
+
+    [Fact]
+    public void Find_GoldHeCantGetToAtAll_DoesntKeepHimFromTheRest()
+    {
+        // Arrange
+        var state = State("""
+            $ P  @$
+            @@@@@@@
+            """, goldLeft: 2);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal((0, 0, 0, 0), Place(route.End));
+    }
+
+    [Fact]
+    public void Find_NoWayOutAtAll_StillTakesTheGold()
+    {
+        // Arrange
+        var state = State("""
+            @@@@@
+            @P $@
+            @@@@@
+            """, goldLeft: 1);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal((3, 1, 0, 0), Place(route.End));
+    }
+
+    [Fact]
+    public void Find_LastGoldInAPitWithNoWayOut_GivesNone()
+    {
+        // Arrange
+        var state = State("""
+            @   P     @
+            @  @@@@@@@@
+            @ $@
+            @@@@
+            """, goldLeft: 1);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.Null(route);
     }
 
     [Fact]
@@ -310,13 +396,13 @@ public class RouteTests
     {
         // Arrange
         var state = State("""
-             P
-            ############################
-            ############################
-            ############################
-            @@@@$@@@@@@@@@@@@@@@@@@@@@@@
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            """);
+             P   @h
+            #####@h
+            #####@h
+            #####@h
+            @@@@$ h
+            @@@@@@@
+            """, goldLeft: 1);
         var route = Route.Find(state);
         Assert.NotNull(route);
 
@@ -343,6 +429,15 @@ public class RouteTests
         // Assert
         Assert.IsType<ArgumentException>(exception);
     }
+
+    // The nearer gold is down in a pit he can't climb out of, until the exit ladders appear there.
+    private const string PitWithAWayOutOnlyAtTheEnd = """
+         h
+        @h  P     $@
+        @h @@@@@@@@@
+        @h$@
+        @@@@
+        """;
 
     // The holes he digs on the route, one after another.
     private static List<TilePosition> HolesDug(GameState start, Route route)

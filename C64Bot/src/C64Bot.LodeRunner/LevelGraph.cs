@@ -24,6 +24,7 @@ public sealed class LevelGraph
     private static readonly MoveKind[] Ways = [MoveKind.Left, MoveKind.Right, MoveKind.Up, MoveKind.Down];
 
     private readonly Dictionary<TilePosition, IReadOnlyList<Run>> _runs = [];
+    private readonly Level _level;
 
     /// <param name="state">
     /// A state of the level: its tiles, with the exit ladders if they're there. Where the player is, the holes, and
@@ -32,6 +33,7 @@ public sealed class LevelGraph
     /// <exception cref="NotSupportedException">The level has guards, which the rules don't have yet.</exception>
     public LevelGraph(GameState state)
     {
+        _level = state.Level;
         // Each place, with its moves on the level without holes and gold.
         var level = state.Level.Replace(Tile.Gold, Tile.Empty);
         var moves = new Dictionary<TilePosition, Dictionary<MoveKind, (Move Move, TilePosition[] Tiles)>>();
@@ -39,8 +41,9 @@ public sealed class LevelGraph
         {
             for (var column = 0; column < Level.Width; column++)
             {
+                // With no gold left, the top row completes the level, so it's no place to stop.
                 var position = new TilePosition(column, row);
-                if (level[position] is Tile.Brick or Tile.Solid)
+                if (level[position] is Tile.Brick or Tile.Solid || (row == 0 && state.GoldLeft == 0))
                     continue;
 
                 var there = StateAt(state, level, position);
@@ -71,10 +74,12 @@ public sealed class LevelGraph
     /// <remarks>
     /// He goes from place to place as the graph's moves take him, and into holes: a brick counts as a hole if he could
     /// dig it at all. By the game's rules, he digs a brick standing beside it on the tile above, which can be in a hole,
-    /// and only when the tile above the brick is empty or a hole: not when there's gold, a ladder or a rope on it. From
+    /// and only when the tile above the brick is empty or a hole: not when there's a ladder or a rope on it, nor gold,
+    /// but gold he can take first, so that counts as taken. From
     /// a hole, he can go into the holes beside it, or out to the side where there's no wall, and down where the brick
     /// below is dug or there's none. He can't climb out of one, and only gets up into one from a ladder below it. The
-    /// holes open in the state count as dug.
+    /// holes open in the state count as dug. If the graph has ladders the state doesn't, such as the exit ladders,
+    /// he can go either way, as if they were there and as if they weren't.
     /// </remarks>
     public IReadOnlySet<TilePosition> WithinReach(GameState state) => new Reach(this, state).Tiles;
 
@@ -185,7 +190,7 @@ public sealed class LevelGraph
                 IntoAHole(column, row + 1);
                 IntoAHole(column - 1, row);
                 IntoAHole(column + 1, row);
-                if (_level[tile] == Tile.Ladder)
+                if (_level[tile] == Tile.Ladder || _graph._level[tile] == Tile.Ladder)
                     IntoAHole(column, row - 1);
 
                 DigFrom(tile);
@@ -240,7 +245,7 @@ public sealed class LevelGraph
             var brick = new TilePosition(column, row);
             var above = new TilePosition(column, row - 1);
             if (_level[brick] != Tile.Brick || _holes.Contains(brick)
-                || !(_level[above] == Tile.Empty || _holes.Contains(above))
+                || !(_level[above] is Tile.Empty or Tile.Gold || _holes.Contains(above))
                 || !(StandsOn(column - 1, row - 1) || StandsOn(column + 1, row - 1)))
             {
                 return;

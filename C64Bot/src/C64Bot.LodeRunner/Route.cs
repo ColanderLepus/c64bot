@@ -21,6 +21,9 @@ public sealed class Route
     // than 380,000, and that many take about 15 seconds.
     private const int MaxPlaces = 400_000;
 
+    // How many places the short search looks at, from where a route ends, to make sure he can get on from there.
+    private const int OnwardPlaces = 2_000;
+
     private Route(IReadOnlyList<Move> moves)
     {
         Moves = moves;
@@ -41,8 +44,9 @@ public sealed class Route
     public GameState End { get; }
 
     /// <summary>
-    /// Finds a route from this state to the next gold, or once all the gold is taken, to the top row, which completes
-    /// the level. Gives null if he can't get there, or if no route is found among the first 400,000 places looked at.
+    /// Finds a route from this state to the next gold he can take without walking into a trap, or once all the gold is
+    /// taken, to the top row, which completes the level. Gives null if there's none, or if none is found among the
+    /// first 400,000 places looked at.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -53,6 +57,13 @@ public sealed class Route
     /// a ladder, only on tiles within reach, and digging each brick in the way. The passes still to go count twice,
     /// which makes the search head for the goal, so the route it finds can be slower than the fastest, up to twice as
     /// slow. Which gold it goes to is the one it finds a route to first, usually the nearest.
+    /// </para>
+    /// <para>
+    /// A route to gold is a trap if, from where it ends, he can no longer get to gold he could get to at its start, or
+    /// to the top row once the exit ladders are there (<see cref="LevelGraph.WithinReach"/>), or if a short search from
+    /// there, of up to 2,000 places, runs out of places to look at without finding a way on. Then the search goes on
+    /// to the next route: to other gold, or to the same gold another way. It doesn't look further ahead than that, so a
+    /// trap that only shows once more gold is taken isn't seen.
     /// </para>
     /// <para>
     /// To keep the search small, a place he has been at already, with the same holes open, isn't looked at again,
@@ -70,17 +81,33 @@ public sealed class Route
         if (start.Guards.Count > 0)
             throw new NotSupportedException("The rules don't have guards yet.");
 
-        var estimate = new Estimate(start, new LevelGraph(start).WithinReach(start));
-        if (estimate.LeastPasses(start) is not { } least)
-            return null;
+        return Search(start, new LevelGraph(start), MaxPlaces, lookOut: true).Route;
+    }
 
+    public override string ToString() => $"{Moves.Count} moves, {Passes.Count} passes: {string.Join("; ", Moves)}";
+
+    // Searches as Find says, on a graph of the level as it is in the state, and gives up after so many places. Without
+    // looking out, it takes the first route it finds, trap or not.
+    private static (Route? Route, bool GaveUp) Search(GameState start, LevelGraph graph, int maxPlaces, bool lookOut)
+    {
+        var withinReach = graph.WithinReach(start);
+        var estimate = new Estimate(start, withinReach);
+        if (estimate.LeastPasses(start) is not { } least)
+            return (null, false);
+
+        var traps = lookOut && start.GoldLeft > 0 ? new Traps(start, graph, withinReach) : null;
         var earliest = new Dictionary<Place, int> { [Place.Of(start)] = 0 };
         var routes = new PriorityQueue<Step, (int Passes, int Taken)>();
         routes.Enqueue(new Step(start, null, null, 0), (Weight * least, 0));
         while (routes.TryDequeue(out var step, out _))
         {
             if (step.Move is not null && estimate.IsReached(step.State))
-                return new Route(step.Moves());
+            {
+                if (traps is null || !traps.IsTrapped(step.State))
+                    return (new Route(step.Moves()), false);
+
+                continue; // he'd be trapped there, so on to the next route
+            }
 
             if (earliest[Place.Of(step.State)] < step.Passes)
                 continue; // he got there sooner on another route
@@ -100,8 +127,8 @@ public sealed class Route
 
                     earliest[place] = next.Passes;
                     least = still;
-                    if (earliest.Count > MaxPlaces)
-                        return null;
+                    if (earliest.Count > maxPlaces)
+                        return (null, true);
                 }
                 else
                 {
@@ -113,10 +140,8 @@ public sealed class Route
             }
         }
 
-        return null;
+        return (null, false);
     }
-
-    public override string ToString() => $"{Moves.Count} moves, {Passes.Count} passes: {string.Join("; ", Moves)}";
 
     // A route so far: the state at its end, the step before and the move from there, and how many passes it took.
     private sealed record Step(GameState State, Step? Before, Move? Move, int Passes)
@@ -130,6 +155,61 @@ public sealed class Route
             moves.Reverse();
             return moves;
         }
+    }
+
+    // Whether, where a route that takes gold ends, he can no longer get to gold he could get to at its start, or to the
+    // top row once the exit ladders are there, if he could at the start. Gold or a way out that he couldn't get to at
+    // the start doesn't count: no route can change that. Worked out with WithinReach, which never leaves out a tile he
+    // can get to. And whether a short search from there runs out of places to look at without finding a way on. So a
+    // route ruled out is a trap for sure.
+    private sealed class Traps(GameState start, LevelGraph graph, IReadOnlySet<TilePosition> withinReach)
+    {
+        private readonly TilePosition[] _gold = [.. GoldIn(start.Level).Where(withinReach.Contains)];
+        private LevelGraph? _withExitLadders;
+        private bool _wayOut;
+
+        public bool IsTrapped(GameState end)
+        {
+            if (end.GoldLeft > 0)
+            {
+                var fromEnd = graph.WithinReach(end);
+                if (_gold.Any(gold => end.Level[gold] == Tile.Gold && !fromEnd.Contains(gold)))
+                    return true;
+            }
+
+            // The exit ladders appear when the last gold is taken, which the game does in the same pass. Until then,
+            // the graph has them, and the level he digs in doesn't, so both count.
+            if (_withExitLadders is null)
+            {
+                _withExitLadders = new LevelGraph(WithExitLadders(end));
+                _wayOut = ReachesTheTop(start);
+            }
+
+            if (_wayOut && !ReachesTheTop(end))
+                return true;
+
+            // On to the rest he could get to at the start, if there's any.
+            var more = end.GoldLeft > 0 ? _gold.Any(gold => end.Level[gold] == Tile.Gold) : _wayOut;
+            if (end.Completed || !more)
+                return false;
+
+            var onward = Search(end, end.GoldLeft > 0 ? graph : _withExitLadders, OnwardPlaces, lookOut: false);
+            return onward is { Route: null, GaveUp: false };
+        }
+
+        private bool ReachesTheTop(GameState state) => _withExitLadders!.WithinReach(state).Any(tile => tile.Row == 0);
+
+        private static IEnumerable<TilePosition> GoldIn(Level level) =>
+            Enumerable.Range(0, Level.Width * Level.Height)
+                .Select(i => new TilePosition(i % Level.Width, i / Level.Width))
+                .Where(position => level[position] == Tile.Gold);
+
+        // The state after a pass with no gold left, in which the game shows the exit ladders.
+        private static GameState WithExitLadders(GameState state) =>
+            new GameState(
+                    state.Level, state.Player, state.Guards, [], state.Lives, state.Score, goldLeft: 0, alive: true,
+                    completed: false)
+                .Next(Joystick.None);
     }
 
     // Where he is, which way fire digs, and which holes are open. Nothing else that the next passes depend on can be

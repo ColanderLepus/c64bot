@@ -233,6 +233,24 @@ public class LevelGraphTests
     }
 
     [Fact]
+    public void WithinReach_BrickWithGoldOnIt_CanBeDugOnceTheGoldIsTaken()
+    {
+        // Arrange
+        var state = State("""
+            P$@
+            @#@
+            @$@
+            @@@
+            """);
+
+        // Act
+        var reach = new LevelGraph(state).WithinReach(state);
+
+        // Assert
+        Assert.Contains(new TilePosition(1, 2), reach);
+    }
+
+    [Fact]
     public void WithinReach_GoldThreeBricksDown_IsWithinReach()
     {
         // Arrange

@@ -122,7 +122,7 @@ public sealed class Move
         {
             moving.Pass(Joystick.Fire);
         }
-        while (moving.State.Alive && moving.State.Player.Digging is not null);
+        while (moving.State is { Alive: true, Completed: false, Player.Digging: not null });
 
         // The dig stops at once if it isn't possible there, and the hole is there only if it went all the way.
         if (moving.State.Holes.All(open => open.Position != hole))
