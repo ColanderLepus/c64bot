@@ -387,6 +387,74 @@ public class RouteTests
     }
 
     [Fact]
+    public void Find_GoldInAPitAtTheEndOfALongWalk_WalksThereFirstThenDigs()
+    {
+        // Arrange: level 17 without guards, with only the gold at G8 left, under three bricks. He has to climb to row
+        // C and dig a pit there; a search with digging from where he is gives up long before.
+        var state = State("""
+            h                          h
+            h                          h
+            h                          h
+            H###T######################H
+            H###T######################H
+            H       ##--------##       H
+            H       $#H       ##       H
+            H  #o#  ##H ########  #####H
+            H  # #  ##H       ##  ## ##H
+            H   P   ##H       ##  #####H
+            H  ###  ########HH##  ## ##H
+            H  ###  ########HH##  #####H
+            H  ###  ##      H ##       H
+            H  ###  ##      H ##       H
+            ##########H#########H#######
+            #######   H######   H#######
+            """, goldLeft: 1);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal((8, 6, 0, 0), Place(route.End));
+    }
+
+    [Fact]
+    public void Find_GoldInABoxUnderBricksBesideALadder_DigsThePitTheLadderAllows()
+    {
+        // Arrange: level 10 without guards, with only the gold in the box left. Beside the ladder in column 10, the
+        // pit into the box is G7 to G9, H7 to H9, I7 and I8, and J7 (the owner's).
+        var state = State("""
+                                     h
+                    H#######  P      h
+                    H      ######    h
+            ##########H              h
+                      H######h#####H##
+                      H      h     H
+            ##########H      h     H
+            ##########H#######@@   H####
+            ##########H            H
+            ##########H         ---H
+            ##      ##H       ##   H
+            ##  $$  ##H            H
+            ###########H#######H   H
+                       H       ########H
+                       H               H
+            ############################
+            """, goldLeft: 2);
+
+        // Act
+        var route = Route.Find(state);
+
+        // Assert
+        Assert.NotNull(route);
+        Assert.Equal(
+            [
+                new(7, 6), new(8, 6), new(9, 6), new(7, 7), new(8, 7), new(9, 7), new(7, 8), new(8, 8), new(7, 9),
+            ],
+            HolesDug(state, route));
+    }
+
+    [Fact]
     public void Find_LastGoldInAPitWithNoWayOut_GivesNone()
     {
         // Arrange

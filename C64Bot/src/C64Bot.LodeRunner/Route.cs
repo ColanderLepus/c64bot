@@ -21,6 +21,20 @@ public sealed class Route
     // than 380,000, and that many take about 15 seconds.
     private const int MaxPlaces = 400_000;
 
+    // How many pits are tried, at most; how many places the walk to where he digs each hole looks at; and how many the
+    // search on to gold from where he lands.
+    private const int Pits = 8;
+    private const int WalkPlaces = 3_000;
+    private const int OnFromAPit = 20_000;
+
+    // How many places the search from where he is looks at first, for what's near, before walking first, then digging.
+    private const int NearPlaces = 50_000;
+
+    // From how many places he walks to, at most, a search with digging is tried, and how many places it looks at. On
+    // level 10, the pit into the box from above it takes about 70,000.
+    private const int Spots = 4;
+    private const int SpotPlaces = 150_000;
+
     // How many places the short search looks at, from where a route ends, to make sure he can get on from there.
     private const int OnwardPlaces = 2_000;
 
@@ -82,7 +96,12 @@ public sealed class Route
             throw new NotSupportedException("The rules don't have guards yet.");
 
         var graph = new LevelGraph(start);
-        return SearchTheGraph(start, graph) ?? Search(start, graph, MaxPlaces, searchOn: true).Route;
+        var ways = Ways.From(start, graph);
+        return (ways is null ? null : SearchTheGraph(start, graph, ways))
+            ?? ThroughAPit(start, graph)
+            ?? Search(start, graph, NearPlaces, searchOn: true).Route
+            ?? (ways is null ? null : WalkThenDig(start, graph, ways))
+            ?? Search(start, graph, MaxPlaces, searchOn: true).Route;
     }
 
     public override string ToString() => $"{Moves.Count} moves, {Passes.Count} passes: {string.Join("; ", Moves)}";
@@ -91,67 +110,205 @@ public sealed class Route
     // takes no time at all. The graph has no holes, so each route found is played pass by pass by the game's rules: it's
     // only taken if every move ends where it does in the graph. And it's checked for traps as Find says. Gives null if
     // none is found that way.
-    private static Route? SearchTheGraph(GameState start, LevelGraph graph)
+    private static Route? SearchTheGraph(GameState start, LevelGraph graph, Ways ways)
     {
-        var at = start.Player.Position;
-        if (start.Player is not { OffsetX: 0, OffsetY: 0 } || !graph.IsPlace(at))
-            return null;
-
-        // The quickest way to each place, and the runs that reach gold, or complete the level, from there.
-        var passes = new Dictionary<TilePosition, int> { [at] = 0 };
-        var cameBy = new Dictionary<TilePosition, Run>();
-        var goals = new List<(int Passes, Run Run)>();
-        var next = new PriorityQueue<TilePosition, int>();
-        next.Enqueue(at, 0);
-        while (next.TryDequeue(out var place, out var sofar))
+        var traps = start.GoldLeft > 0 ? new Traps(start, graph, graph.WithinReach(start), searchOn: true) : null;
+        foreach (var known in ways.ToGoals())
         {
-            if (sofar > passes[place])
-                continue;
-
-            foreach (var run in graph.RunsFrom(place))
+            if (Played(start, known, toTheGoal: true) is { } moves
+                && (traps is null || !traps.IsTrapped(moves[^1].End)))
             {
-                var then = sofar + run.Passes.Count;
-                if (IsAGoal(run))
-                {
-                    goals.Add((then, run));
-                    continue;
-                }
-
-                if (passes.TryGetValue(run.To, out var known) && known <= then)
-                    continue;
-
-                (passes[run.To], cameBy[run.To]) = (then, run);
-                next.Enqueue(run.To, then);
+                return new Route(moves);
             }
         }
 
-        var withinReach = graph.WithinReach(start);
-        var traps = start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn: true) : null;
-        foreach (var (_, last) in goals.OrderBy(goal => goal.Passes))
-        {
-            var runs = new List<Run> { last };
-            for (var from = last.From; from != at; from = cameBy[from].From)
-                runs.Insert(0, cameBy[from]);
+        return null;
+    }
 
-            if (Played(start, runs) is { } route && (traps is null || !traps.IsTrapped(route.End)))
+    // Through a pit (the owner's rule, see Pit): of the pits whose landing leads on to gold, those with the fewest holes
+    // first, the route through each, put together straight from the pit. Gives null if none is found that way.
+    private static Route? ThroughAPit(GameState start, LevelGraph graph)
+    {
+        if (start.GoldLeft == 0)
+            return null;
+
+        var leading = LeadingToGold(start, graph);
+        var traps = new Traps(start, graph, graph.WithinReach(start), searchOn: true);
+        var pits = Pit.AllIn(start, graph)
+            .Where(pit => leading.Contains(pit.LandsAt) || pit.FallsPast.Any(tile => start.Level[tile] == Tile.Gold))
+            .OrderBy(pit => pit.Digs.Count)
+            .Take(Pits);
+        foreach (var pit in pits)
+        {
+            if (Through(start, graph, pit, traps) is { } route)
                 return route;
         }
 
         return null;
-
-        bool IsAGoal(Run run) =>
-            start.GoldLeft > 0
-                ? Enumerable.Range(0, run.Moves.Count).Any(move => run.TilesOn(move).Any(tile => start.Level[tile] == Tile.Gold))
-                : run.Moves[^1].End.Completed;
     }
 
-    // The route that playing the runs gives, pass by pass, by the game's rules, up to where he takes gold or completes
-    // the level. Null if a move doesn't end where it does in the graph, as when a hole he dropped through is in the way.
-    private static Route? Played(GameState start, List<Run> runs)
+    // The route through the pit: to where he digs each hole, the dig, and at the end a step over the bottom, which drops
+    // him through it; then on to gold from where he lands. Each move is worked out by the game's rules, and if one
+    // doesn't go as the pit says, as when a hole closes too soon, there's no route.
+    private static Route? Through(GameState start, LevelGraph graph, Pit pit, Traps traps)
     {
         var moves = new List<Move>();
         var state = start;
-        foreach (var known in runs.SelectMany(run => run.Moves))
+        var (dig, over) = pit.Side == Direction.Right
+            ? (MoveKind.DigLeft, MoveKind.Left)
+            : (MoveKind.DigRight, MoveKind.Right);
+        foreach (var (hole, from) in pit.Digs)
+        {
+            if (WalkTo(state, from) is not { } walk)
+                return null;
+
+            moves.AddRange(walk);
+            state = walk.Count > 0 ? walk[^1].End : state;
+            if (Move.AllFrom(state).FirstOrDefault(move => move.Kind == dig) is not { } dug
+                || dug.End.Holes.All(open => open.Position != hole))
+            {
+                return null;
+            }
+
+            moves.Add(dug);
+            state = dug.End;
+        }
+
+        if (Move.AllFrom(state).FirstOrDefault(move => move.Kind == over) is not { } drop)
+            return null;
+
+        moves.Add(drop);
+        state = drop.End;
+        if (state.GoldLeft < start.GoldLeft)
+            return traps.IsTrapped(state) ? null : new Route(moves);
+
+        if (state.Player.Position != pit.LandsAt)
+            return null;
+
+        return Search(state, graph, OnFromAPit, searchOn: true, traps).Route is { } rest
+            ? new Route([.. moves, .. rest.Moves])
+            : null;
+    }
+
+    // The quickest walk, without digging or taking gold, to the middle of a tile, worked out move by move by the game's
+    // rules. Empty if he's there; null if it isn't found among a few thousand places.
+    private static List<Move>? WalkTo(GameState start, TilePosition tile)
+    {
+        if (IsAt(start))
+            return [];
+
+        var seen = new HashSet<(TilePosition, int, int)> { Key(start) };
+        var walks = new PriorityQueue<Step, int>();
+        walks.Enqueue(new Step(start, null, null, 0), 0);
+        while (walks.TryDequeue(out var step, out _) && seen.Count < WalkPlaces)
+        {
+            foreach (var move in Move.AllFrom(step.State))
+            {
+                if (move.Kind is MoveKind.DigLeft or MoveKind.DigRight or MoveKind.WaitForHole
+                    || move.End.GoldLeft < start.GoldLeft || move.End.Completed || !seen.Add(Key(move.End)))
+                {
+                    continue;
+                }
+
+                var next = new Step(move.End, step, move, step.Passes + move.Passes.Count);
+                if (IsAt(move.End))
+                    return next.Moves();
+
+                walks.Enqueue(next, next.Passes);
+            }
+        }
+
+        return null;
+
+        bool IsAt(GameState state) => state.Player is { OffsetX: 0, OffsetY: 0 } player && player.Position == tile;
+
+        static (TilePosition, int, int) Key(GameState state) =>
+            (state.Player.Position, state.Player.OffsetX, state.Player.OffsetY);
+    }
+
+    // The places from which the graph's runs lead to gold, as the runs are in the graph.
+    private static HashSet<TilePosition> LeadingToGold(GameState start, LevelGraph graph)
+    {
+        var leading = new HashSet<TilePosition>();
+        var into = new Dictionary<TilePosition, List<TilePosition>>();
+        var next = new Queue<TilePosition>();
+        foreach (var place in graph.Places)
+        {
+            foreach (var run in graph.RunsFrom(place))
+            {
+                if (IsAGoal(start, run))
+                {
+                    if (leading.Add(place))
+                        next.Enqueue(place);
+                }
+                else if (into.TryGetValue(run.To, out var from))
+                {
+                    from.Add(place);
+                }
+                else
+                {
+                    into[run.To] = [place];
+                }
+            }
+        }
+
+        while (next.TryDequeue(out var place))
+        {
+            foreach (var from in into.GetValueOrDefault(place, []))
+            {
+                if (leading.Add(from))
+                    next.Enqueue(from);
+            }
+        }
+
+        return leading;
+    }
+
+    // Whether the run takes gold, or completes the level once there's none left, as the run is in the graph.
+    private static bool IsAGoal(GameState start, Run run) =>
+        start.GoldLeft > 0
+            ? Enumerable.Range(0, run.Moves.Count).Any(move => run.TilesOn(move).Any(tile => start.Level[tile] == Tile.Gold))
+            : run.Moves[^1].End.Completed;
+
+    // Walks first, then digs (the owner's idea): from places he can walk to along the graph, a search with digging, from
+    // the places where the gold seems nearest first, counting a brick dug into from the side as all the bricks above it.
+    // The route is the walk and the digging, checked for traps as Find says. Gives null if none is found that way.
+    private static Route? WalkThenDig(GameState start, LevelGraph graph, Ways ways)
+    {
+        var withinReach = graph.WithinReach(start);
+        var estimate = new Estimate(start, withinReach, pitted: true);
+        var traps = start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn: true) : null;
+        var spots = new List<(int Least, List<Move> Walk, GameState There)>();
+        foreach (var place in ways.Places)
+        {
+            // A walk that takes gold on the way is a route of its own, which the graph search has looked at.
+            if (Played(start, ways.To(place), toTheGoal: false) is not { } walk)
+                continue;
+
+            var there = walk.Count > 0 ? walk[^1].End : start;
+            if (estimate.LeastPasses(there) is { } least)
+                spots.Add((least, walk, there));
+        }
+
+        // Where he is has been searched from already.
+        foreach (var (_, walk, there) in spots.Where(spot => spot.Walk.Count > 0).OrderBy(spot => spot.Least).Take(Spots))
+        {
+            if (Search(there, graph, SpotPlaces, searchOn: true, traps).Route is { } dig)
+                return new Route([.. walk, .. dig.Moves]);
+        }
+
+        return null;
+    }
+
+    // The moves that playing the graph's moves gives, pass by pass, by the game's rules. To the goal: up to where he
+    // takes gold or completes the level, and null if he doesn't. Otherwise all of them, and null if he takes gold or
+    // completes the level on the way. Null too if a move doesn't end where it does in the graph, as when a hole is in
+    // the way.
+    private static List<Move>? Played(GameState start, IEnumerable<Move> graphMoves, bool toTheGoal)
+    {
+        var moves = new List<Move>();
+        var state = start;
+        foreach (var known in graphMoves)
         {
             // A dig is worked out afresh: which way fire digs depends on his last step left or right.
             var move = known.Kind is MoveKind.DigLeft or MoveKind.DigRight
@@ -166,22 +323,24 @@ public sealed class Route
             moves.Add(move);
             state = move.End;
             if (start.GoldLeft > 0 ? state.GoldLeft < start.GoldLeft : state.Completed)
-                return new Route(moves);
+                return toTheGoal ? moves : null;
         }
 
-        return null;
+        return toTheGoal ? null : moves;
     }
 
     // Searches as Find says, on a graph of the level as it is in the state, and gives up after so many places. Without
-    // searching on, it only rules out a route as a trap with WithinReach.
-    private static (Route? Route, bool GaveUp) Search(GameState start, LevelGraph graph, int maxPlaces, bool searchOn)
+    // searching on, it only rules out a route as a trap with WithinReach. The traps can be those of an earlier state,
+    // such as where a walk to this one started.
+    private static (Route? Route, bool GaveUp) Search(
+        GameState start, LevelGraph graph, int maxPlaces, bool searchOn, Traps? traps = null)
     {
         var withinReach = graph.WithinReach(start);
         var estimate = new Estimate(start, withinReach);
         if (estimate.LeastPasses(start) is not { } least)
             return (null, false);
 
-        var traps = start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn) : null;
+        traps ??= start.GoldLeft > 0 ? new Traps(start, graph, withinReach, searchOn) : null;
         var earliest = new Dictionary<Place, int> { [Place.Of(start)] = 0 };
         var routes = new PriorityQueue<Step, (int Passes, int Taken)>();
         routes.Enqueue(new Step(start, null, null, 0), (Weight * least, 0));
@@ -227,6 +386,83 @@ public sealed class Route
         }
 
         return (null, false);
+    }
+
+    // The quickest ways along the graph's runs from where he is: to each place he can get to, and to each run there that
+    // takes gold, or completes the level, as the runs are in the graph.
+    private sealed class Ways
+    {
+        private readonly TilePosition _from;
+
+        // How he gets to each place he can get to: on which run, and after how many of its moves. A place he passes on
+        // a run is one too, as somewhere to stop.
+        private readonly Dictionary<TilePosition, (Run Run, int Moves)> _cameBy = [];
+        private readonly List<(int Passes, Run Run)> _goals = [];
+
+        private Ways(GameState start, LevelGraph graph)
+        {
+            _from = start.Player.Position;
+            var passes = new Dictionary<TilePosition, int> { [_from] = 0 };
+            var next = new PriorityQueue<TilePosition, int>();
+            next.Enqueue(_from, 0);
+            while (next.TryDequeue(out var place, out var sofar))
+            {
+                if (sofar > passes[place])
+                    continue;
+
+                foreach (var run in graph.RunsFrom(place))
+                {
+                    if (IsAGoal(start, run))
+                    {
+                        _goals.Add((sofar + run.Passes.Count, run));
+                        continue;
+                    }
+
+                    // The places on the way, where he can stop, but which only lead on along the run; then its end.
+                    var then = sofar;
+                    for (var moves = 1; moves <= run.Moves.Count; moves++)
+                    {
+                        then += run.Moves[moves - 1].Passes.Count;
+                        var at = run.Moves[moves - 1].End.Player.Position;
+                        var isTheEnd = moves == run.Moves.Count;
+                        if ((!isTheEnd && run.Way is MoveKind.DigLeft or MoveKind.DigRight)
+                            || (passes.TryGetValue(at, out var known) && known <= then))
+                        {
+                            continue;
+                        }
+
+                        (passes[at], _cameBy[at]) = (then, (run, moves));
+                        if (isTheEnd)
+                            next.Enqueue(at, then);
+                    }
+                }
+            }
+
+            Places = passes.Keys;
+        }
+
+        public IReadOnlyCollection<TilePosition> Places { get; }
+
+        // Null if he isn't in the middle of a place.
+        public static Ways? From(GameState start, LevelGraph graph) =>
+            start.Player is { OffsetX: 0, OffsetY: 0 } && graph.IsPlace(start.Player.Position)
+                ? new Ways(start, graph)
+                : null;
+
+        // The moves to each goal, the quickest first, as they are in the graph.
+        public IEnumerable<List<Move>> ToGoals() =>
+            _goals.OrderBy(goal => goal.Passes).Select(goal => (List<Move>)[.. To(goal.Run.From), .. goal.Run.Moves]);
+
+        // The moves to a place, as they are in the graph.
+        public List<Move> To(TilePosition place)
+        {
+            var moves = new List<Move>();
+            for (var at = place; at != _from; at = _cameBy[at].Run.From)
+                moves.InsertRange(0, _cameBy[at].Run.Moves.Take(_cameBy[at].Moves));
+
+            return moves;
+        }
+
     }
 
     // A route so far: the state at its end, the step before and the move from there, and how many passes it took.
@@ -339,6 +575,9 @@ public sealed class Route
     //   other way, a step each pass.
     // - A dig: 11 more. Of its 13 passes, he only moves in the first two, to the middle of his tile.
     // - Taking gold, or getting level with the top row, once he's on its tile: 2, from the edge to the middle.
+    // Pitted, it's no longer the least, but a guess at the passes, for telling where to dig from: into a brick from the
+    // side, he digs not only it, but every brick above it, since a brick is dug from above (the owner's pit); and he only
+    // goes to the side from a tile where something holds him: a ladder, a rope, or a floor below.
     private sealed class Estimate
     {
         private const int Tiles = Level.Width * Level.Height;
@@ -363,8 +602,11 @@ public sealed class Route
         private readonly PriorityQueue<int, int> _next = new();
         private int _estimate;
 
-        public Estimate(GameState start, IReadOnlySet<TilePosition> withinReach)
+        private readonly bool _pitted;
+
+        public Estimate(GameState start, IReadOnlySet<TilePosition> withinReach, bool pitted = false)
         {
+            _pitted = pitted;
             _goldLeft = start.GoldLeft;
             for (var i = 0; i < Tiles; i++)
             {
@@ -430,13 +672,14 @@ public sealed class Route
 
             var tile = TileNow(to);
             if (tile == Tile.Solid || (tile == Tile.TrapBrick && Ways[way].Row != 1)
-                || (Ways[way].Row == -1 && TileNow(from) != Tile.Ladder))
+                || (Ways[way].Row == -1 && TileNow(from) != Tile.Ladder)
+                || (_pitted && Ways[way].Row == 0 && !IsHeld(from)))
             {
                 return;
             }
 
             if (tile == Tile.Brick)
-                passes += Digging;
+                passes += Digging * (_pitted && Ways[way].Row == 0 ? BricksFrom(to) : 1);
 
             var node = to * Ways.Length + way;
             if (_fromEstimate[node] == _estimate && _passes[node] <= passes)
@@ -447,6 +690,21 @@ public sealed class Route
         }
 
         private Tile TileNow(int tile) => _open[tile] ? Tile.Empty : _tiles[tile];
+
+        private bool IsHeld(int tile) =>
+            TileNow(tile) is Tile.Ladder or Tile.Rope
+            || tile >= Tiles - Level.Width
+            || TileNow(tile + Level.Width) is Tile.Brick or Tile.Solid or Tile.Ladder;
+
+        // The bricks from this one up, one above another.
+        private int BricksFrom(int tile)
+        {
+            var bricks = 0;
+            for (var above = tile; above >= 0 && TileNow(above) == Tile.Brick; above -= Level.Width)
+                bricks++;
+
+            return bricks;
+        }
 
         private static int TileOf(TilePosition position) => position.Row * Level.Width + position.Column;
     }
