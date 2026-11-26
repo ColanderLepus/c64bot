@@ -7,9 +7,6 @@ namespace C64Bot.LodeRunner.Tests;
 [Collection(LodeRunnerCollection.Name)]
 public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
 {
-    // Setting up a level takes about 490 frames after StartLevel, or 640 if the game reads it from the disk; these
-    // leave room.
-    private const int FramesUntilWaiting = 1200;
     private const int MaxFrames = 2500;
 
     private LibretroCore Core => lodeRunner.Core;
@@ -19,12 +16,12 @@ public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
     {
         // Arrange
         lodeRunner.Starter.StartLevel(lodeRunner.Levels[1]);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var level1 = LevelAsBuilt();
 
         // Act
         lodeRunner.Starter.StartLevel(lodeRunner.Levels[5]);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
 
         // Assert
         Assert.Equal(5, Core.SystemRam[RamMap.LevelNumber]);
@@ -93,12 +90,12 @@ public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
         var level = lodeRunner.Levels[number];
         lodeRunner.Starter.StartLevel(level.WithoutGuards());
         Core.WriteSystemRam(RamMap.LevelInBuffer, [0xFF]);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var fromDisk = Core.SystemRam.ToArray();
 
         // Act
         lodeRunner.Starter.StartLevel(level);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var fromLevel = Core.SystemRam.ToArray();
 
         // Assert
@@ -188,7 +185,7 @@ public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
 
         // Act
         lodeRunner.Starter.StartLevel(level);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var ram = Core.SystemRam.ToArray();
 
         // Assert
@@ -210,16 +207,26 @@ public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
         var stored = lodeRunner.Levels[89];
         var level = stored.WithoutGuards().Replace(Tile.Gold, Tile.Empty).With(5, 2, Tile.Gold);
         lodeRunner.Starter.StartLevel(level);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var listed = State()!.Level.HiddenLadders;
 
-        // Act
-        RunUntil(new GamePhaseReader(), RetroPadButton.Right, () => Core.SystemRam[RamMap.GoldLeft] == 0xFF);
+        // Act: the ladders appear one after another, over several frames
+        var frames = new List<Level>();
+        RunUntil(new GamePhaseReader(), RetroPadButton.Right, () =>
+        {
+            frames.Add(Level.Read(Core.SystemRam));
+            return Core.SystemRam[RamMap.GoldLeft] == 0xFF;
+        });
         Core.RunFrames(30);
         var after = State()!.Level;
 
         // Assert
         Assert.Equal(45, listed.Count);
+        Assert.Contains(frames, frame => frame.HiddenLadders.Count is > 0 and < 45);
+        Assert.All(frames, frame => Assert.Equal(
+            listed.Where(position => frame[position] != Tile.Ladder),
+            frame.HiddenLadders));
+        Assert.Empty(after.HiddenLadders);
         Assert.All(listed, position => Assert.Equal(Tile.Ladder, after[position]));
         Assert.Equal(
             [new TilePosition(1, 0), new TilePosition(2, 1), new TilePosition(3, 1)],
@@ -244,7 +251,7 @@ public class GameStarterTests(LodeRunnerReadyToStart lodeRunner)
         var reader = new GamePhaseReader();
         RunUntil(reader, RetroPadButton.Right, () => State()?.Player.Position.Column == 3);
         RunUntil(reader, RetroPadButton.Up, () => Core.SystemRam[RamMap.LevelNumber] == 2);
-        Core.RunFrames(FramesUntilWaiting);
+        lodeRunner.RunUntilSetUp();
         var ram = Core.SystemRam.ToArray();
 
         // Assert

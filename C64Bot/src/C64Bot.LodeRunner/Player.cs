@@ -13,6 +13,14 @@ namespace C64Bot.LodeRunner;
 /// <param name="Facing">Which way he faces; none on a ladder, whose pictures face neither way.</param>
 /// <param name="Falling">Whether he's falling.</param>
 /// <param name="Digging">Which side he's digging, if he is.</param>
+/// <param name="DigPasses">
+/// How many passes of the game's main loop the dig has taken so far, 1 to 12; the hole opens in the 13th. 0 when he
+/// isn't digging.
+/// </param>
+/// <param name="DigSide">
+/// Which side fire digs: the side of his last move left or right. He can be on a ladder then, where he faces neither
+/// way.
+/// </param>
 public sealed record Player(
     TilePosition Position,
     int OffsetX,
@@ -20,7 +28,9 @@ public sealed record Player(
     Pose Pose,
     Direction? Facing,
     bool Falling,
-    Direction? Digging)
+    Direction? Digging,
+    int DigPasses,
+    Direction DigSide)
 {
     private const int LadderSprites = 2;
 
@@ -50,7 +60,18 @@ public sealed record Player(
             _ => null,
         };
 
+        var digPasses = digging switch
+        {
+            Direction.Left => ram[RamMap.PlayerDigStep],
+            Direction.Right => ram[RamMap.PlayerDigStep] - RamMap.DigStepsRight,
+            _ => 0,
+        };
+
+        // The game itself only looks at whether the value is negative.
+        var digSide = ram[RamMap.PlayerLastSide] >= 0x80 ? Direction.Left : Direction.Right;
+
         return new Player(
-            position, offsetX, offsetY, sprite.Pose, sprite.Facing, ram[RamMap.PlayerFalling] == 0, digging);
+            position, offsetX, offsetY, sprite.Pose, sprite.Facing, ram[RamMap.PlayerFalling] == 0, digging, digPasses,
+            digSide);
     }
 }

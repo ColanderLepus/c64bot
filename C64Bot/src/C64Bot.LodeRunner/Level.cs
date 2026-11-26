@@ -43,8 +43,10 @@ public sealed class Level
     {
         Number = number;
         _tiles = tiles;
-        _listedLadders = listedLadders;
-        HiddenLadders = [.. listedLadders, .. Positions(tiles, Tile.HiddenLadder)];
+
+        // A ladder that's among the tiles has appeared, even if the game hasn't crossed it off its list yet.
+        _listedLadders = [.. listedLadders.Where(ladder => this[ladder] != Tile.Ladder)];
+        HiddenLadders = [.. _listedLadders, .. Positions(tiles, Tile.HiddenLadder)];
     }
 
     /// <summary>
@@ -57,12 +59,12 @@ public sealed class Level
     public int Number { get; }
 
     /// <summary>
-    /// Where the exit ladders appear once all gold is taken.
+    /// Where the exit ladders are that are still hidden. They appear once all gold is taken.
     /// </summary>
     /// <remarks>
-    /// In the running game, the tiles don't show them until then: they're empty, or have gold that a guard dropped
-    /// there. After that the ladders are among the tiles, and still listed here. The game keeps at most 45 and drops
-    /// the rest, so a level on the disk can have more than the same level in the running game.
+    /// In the running game, the tiles don't show them: they're empty, or have gold that a guard dropped there. When
+    /// the ladders appear, one after another, they become tiles and are no longer listed here. The game keeps at most
+    /// 45 and drops the rest, so a level on the disk can have more than the same level in the running game.
     /// </remarks>
     public IReadOnlyList<TilePosition> HiddenLadders { get; }
 
@@ -87,9 +89,15 @@ public sealed class Level
             for (var column = 0; column < Width; column++)
                 tiles[IndexOf(column, row)] = (Tile)ram[RamMap.TileAddress(RamMap.LevelAsBuilt, column, row)];
 
-        var ladders = new TilePosition[Math.Min((int)ram[RamMap.HiddenLadderCount], MaxHiddenLadders)];
-        for (var n = 1; n <= ladders.Length; n++)
-            ladders[n - 1] = new TilePosition(ram[RamMap.HiddenLadderColumns + n], ram[RamMap.HiddenLadderRows + n]);
+        var ladders = new List<TilePosition>();
+        var count = Math.Min((int)ram[RamMap.HiddenLadderCount], MaxHiddenLadders);
+        for (var n = 1; n <= count; n++)
+        {
+            // An entry outside the level is one the game has crossed off (column $FF), or a leftover.
+            var (column, row) = (ram[RamMap.HiddenLadderColumns + n], ram[RamMap.HiddenLadderRows + n]);
+            if (column < Width && row < Height)
+                ladders.Add(new TilePosition(column, row));
+        }
 
         return new Level(ram[RamMap.LevelNumber], tiles, ladders);
     }

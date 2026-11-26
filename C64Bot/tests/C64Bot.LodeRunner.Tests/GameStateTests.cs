@@ -3,7 +3,7 @@ namespace C64Bot.LodeRunner.Tests;
 public class GameStateTests
 {
     [Fact]
-    public void TryRead_PlayerTileWhereThePlayerIs_GivesTheLevelAndThePlayer()
+    public void TryRead_WholePass_GivesTheLevelAndThePlayer()
     {
         // Arrange
         var ram = Ram(column: 5, row: 10);
@@ -19,19 +19,29 @@ public class GameStateTests
         Assert.Equal(Tile.Gold, state.Level[1, 0]);
     }
 
-    [Fact]
-    public void TryRead_NoPlayerTileWhereThePlayerIs_GivesFalse()
+    [Theory]
+    [InlineData(0x611E, false)] // in the player's routine
+    [InlineData(0x612E, false)] // showing the exit ladders
+    [InlineData(0x6144, false)] // in the holes' routine
+    [InlineData(0x614A, false)] // stopped by an interrupt just before it calls the guards' routine
+    [InlineData(0x614C, true)]  // in the guards' routine, or done with it
+    [InlineData(0x6155, true)]  // stopped by an interrupt while it waits for the next pass
+    [InlineData(0x611C, true)]  // stopped by an interrupt just before it starts the next pass
+    [InlineData(0x6098, false)] // setting up the level
+    [InlineData(0x60CA, true)]  // waiting for the first move
+    [InlineData(0x61C8, true)]  // the player is dead
+    [InlineData(0x608E, false)] // before the level is set up
+    public void TryRead_MainCodePosition_GivesFalseUntilThePlayerAndTheHolesAreDone(int position, bool expected)
     {
         // Arrange
         var ram = Ram(column: 5, row: 10);
-        ram[RamMap.TileAddress(RamMap.LevelAsPlayed, 5, 10)] = 0; // his move caught halfway
+        (ram[RamMap.MainCodePosition], ram[RamMap.MainCodePosition + 1]) = ((byte)position, (byte)(position >> 8));
 
         // Act
-        var read = GameState.TryRead(ram, out var state);
+        var read = GameState.TryRead(ram, out _);
 
         // Assert
-        Assert.False(read);
-        Assert.Null(state);
+        Assert.Equal(expected, read);
     }
 
     [Fact]
@@ -46,6 +56,38 @@ public class GameStateTests
 
         // Assert
         Assert.False(read);
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    public void TryRead_PlayerAlive_GivesWhetherHeIs(byte value, bool alive)
+    {
+        // Arrange
+        var ram = Ram(column: 5, row: 10);
+        ram[RamMap.PlayerAlive] = value;
+
+        // Act
+        GameState.TryRead(ram, out var state);
+
+        // Assert
+        Assert.Equal(alive, state!.Alive);
+    }
+
+    [Theory]
+    [InlineData(4, 4, false)]
+    [InlineData(5, 4, true)] // the next level's number, and still this level in the buffer
+    public void TryRead_LevelNumberAndBuffer_GivesWhetherTheLevelIsCompleted(byte number, byte buffer, bool completed)
+    {
+        // Arrange
+        var ram = Ram(column: 5, row: 10);
+        (ram[RamMap.LevelNumberOnDisk], ram[RamMap.LevelInBuffer]) = (number, buffer);
+
+        // Act
+        GameState.TryRead(ram, out var state);
+
+        // Assert
+        Assert.Equal(completed, state!.Completed);
     }
 
     [Fact]
@@ -164,7 +206,7 @@ public class GameStateTests
         Assert.False(read);
     }
 
-    // RAM with an empty level and the player centred at the given tile, marked in the grid as played.
+    // RAM with an empty level and the player centred at the given tile, while the game waits for its next pass.
     private static byte[] Ram(byte column, byte row)
     {
         var ram = new byte[0x10000];
@@ -174,7 +216,7 @@ public class GameStateTests
         ram[RamMap.PlayerStepY] = 2;
         ram[RamMap.PlayerSprite] = 0x08;
         ram[RamMap.PlayerFalling] = 0x20;
-        ram[RamMap.TileAddress(RamMap.LevelAsPlayed, column, row)] = 9;
+        (ram[RamMap.MainCodePosition], ram[RamMap.MainCodePosition + 1]) = (0x55, 0x61);
         return ram;
     }
 }

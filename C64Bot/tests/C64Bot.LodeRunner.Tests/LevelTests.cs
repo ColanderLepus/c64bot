@@ -55,20 +55,36 @@ public class LevelTests
         Assert.Equal(Tile.Empty, level[17, 0]);
     }
 
-    [Theory]
-    [InlineData(Tile.Ladder)] // it has appeared
-    [InlineData(Tile.Gold)]   // dropped there by a guard
-    public void Read_HiddenLadderWhereTheGridHasSomething_GivesBoth(Tile tile)
+    [Fact]
+    public void Read_GoldOnAHiddenLadder_GivesBoth()
     {
-        // Arrange
+        // Arrange: a guard dropped it there
         var ram = RamWithHiddenLadders(new TilePosition(17, 0));
-        ram[RamMap.TileAddress(RamMap.LevelAsBuilt, 17, 0)] = (byte)tile;
+        ram[RamMap.TileAddress(RamMap.LevelAsBuilt, 17, 0)] = (byte)Tile.Gold;
 
         // Act
         var level = Level.Read(ram);
 
         // Assert
-        Assert.Equal(tile, level[17, 0]);
+        Assert.Equal(Tile.Gold, level[17, 0]);
+        Assert.Equal([new TilePosition(17, 0)], level.HiddenLadders);
+    }
+
+    [Theory]
+    [InlineData(17)]   // not crossed off the list yet
+    [InlineData(0xFF)] // crossed off
+    public void Read_LadderHasAppeared_ListsOnlyTheOneStillHidden(byte column)
+    {
+        // Arrange
+        var ram = RamWithHiddenLadders(new(17, 0), new(17, 1));
+        ram[RamMap.TileAddress(RamMap.LevelAsBuilt, 17, 1)] = (byte)Tile.Ladder;
+        ram[RamMap.HiddenLadderColumns + 2] = column;
+
+        // Act
+        var level = Level.Read(ram);
+
+        // Assert
+        Assert.Equal(Tile.Ladder, level[17, 1]);
         Assert.Equal([new TilePosition(17, 0)], level.HiddenLadders);
     }
 
@@ -117,6 +133,19 @@ public class LevelTests
 
         // Act
         var changed = level.With(17, 0, Tile.Gold).Replace(Tile.Brick, Tile.Solid);
+
+        // Assert
+        Assert.Equal([new TilePosition(17, 0)], changed.HiddenLadders);
+    }
+
+    [Fact]
+    public void HiddenLadders_LadderPutWhereOneIsHidden_NoLongerHasIt()
+    {
+        // Arrange
+        var level = Level.Read(RamWithHiddenLadders(new(17, 0), new(17, 1)));
+
+        // Act
+        var changed = level.With(17, 1, Tile.Ladder);
 
         // Assert
         Assert.Equal([new TilePosition(17, 0)], changed.HiddenLadders);

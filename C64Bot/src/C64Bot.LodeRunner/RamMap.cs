@@ -27,7 +27,8 @@ public static class RamMap
     public const int LevelAsBuilt = 0x0A00;
 
     /// <summary>
-    /// The column of hidden exit ladder n is at this address + n, for n from 1 to <see cref="HiddenLadderCount"/>.
+    /// The column of hidden exit ladder n is at this address + n, for n from 1 to <see cref="HiddenLadderCount"/>. It
+    /// becomes <c>$FF</c> when the ladder appears.
     /// </summary>
     public const int HiddenLadderColumns = 0x1200;
 
@@ -36,6 +37,7 @@ public static class RamMap
     /// </summary>
     public const int HiddenLadderRows = 0x1230;
 
+    /// <summary>The number of hidden exit ladders the level started with; it stays when they appear.</summary>
     public const int HiddenLadderCount = 0x1301;
 
     /// <summary>
@@ -76,6 +78,11 @@ public static class RamMap
     public const int PlayerSprite = 0x07;
 
     /// <summary>
+    /// The player's last move left or right: <c>$FF</c> left, <c>$01</c> right. Fire digs on that side.
+    /// </summary>
+    public const int PlayerLastSide = 0x08;
+
+    /// <summary>
     /// 1 while the player is alive, 0 once he has died (caught, trapped in a hole, or the demo was ended).
     /// </summary>
     public const int PlayerAlive = 0x1314;
@@ -85,6 +92,15 @@ public static class RamMap
 
     /// <summary><c>$00</c> when the player isn't digging, <c>$01</c> while he digs to his right, <c>$FF</c> to his left.</summary>
     public const int PlayerDigging = 0x1316;
+
+    /// <summary>
+    /// How far the player's dig has come: goes up by one each pass, from 0 for a dig to his left and from
+    /// <see cref="DigStepsRight"/> for one to his right. Left over from the last dig while he isn't digging.
+    /// </summary>
+    public const int PlayerDigStep = 0x54;
+
+    /// <summary>What <see cref="PlayerDigStep"/> starts at for a dig to the right.</summary>
+    public const int DigStepsRight = 12;
 
     // The guards.
 
@@ -189,6 +205,25 @@ public static class RamMap
     /// waits until it reaches the game speed (5 at normal speed).
     /// </summary>
     public const int InterruptCounter = 0x132D;
+
+    /// <summary>
+    /// How far the game has come in its main code, which sets up a level and then runs the main loop (2 bytes, low
+    /// byte first): where it last called a routine, or where an interrupt last stopped it.
+    /// </summary>
+    /// <remarks>
+    /// It's on the C64's stack, where a call leaves the place to return to. The main code's calls always leave it
+    /// here, and it stays until the main code's next call or interrupt.
+    /// </remarks>
+    public const int MainCodePosition = 0x01FA;
+
+    /// <summary>Where the game goes on once a level is set up.</summary>
+    public const int LevelSetUp = 0x6099;
+
+    /// <summary>Where the main loop starts, with the call that moves the player. The holes come next.</summary>
+    public const int MainLoop = 0x611C;
+
+    /// <summary>Where the main loop calls the routine that moves the guards, the last thing in a pass.</summary>
+    public const int MainLoopGuards = 0x614A;
 
     /// <summary>
     /// Gives the address of a tile in one of the level grids (<see cref="LevelAsBuilt"/> or

@@ -35,7 +35,7 @@ Run from the repo root:
 
 ```powershell
 dotnet build C64Bot                          # build all projects
-dotnet test C64Bot                           # run all tests
+dotnet test C64Bot                           # run all tests (under a minute)
 dotnet run --project C64Bot/src/C64Bot.App          # run the app: starts a new game at level 1 and opens its window
 dotnet run --project C64Bot/src/C64Bot.App -- 5     # the same, at level 5 (1-150)
 dotnet run --project C64Bot/src/C64Bot.App -- 5 noguards    # level 5 without its guards (for development, D17)
@@ -45,7 +45,7 @@ C:\Tools\C64\VICE-3.10\bin\x64sc.exe                                            
 C:\Tools\C64\VICE-3.10\bin\x64sc.exe -autostart "C:\Emulation\ROMs\C64\Lode Runner.d64"      # with Lode Runner version A
 ```
 
-The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`) and the Lode Runner disk, but not the VICE program. So do the tests in `C64Bot.Libretro.Tests` and `C64Bot.LodeRunner.Tests` that run the core; they're skipped (not failed) on a PC without them. In the app's console, T and L save and load a state, R and D compare RAM, and G prints the game state. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
+The app needs the core DLL at `C:\Tools\C64\libretro\vice_x64sc_libretro.dll` (see Environment in `docs/PLAN.md`) and the Lode Runner disk, but not the VICE program. So do the tests in `C64Bot.Libretro.Tests` and `C64Bot.LodeRunner.Tests` that run the core; they're skipped (not failed) on a PC without them. One test is always skipped: the race of the movement rules over all 150 levels, which takes minutes. It runs only with the environment variable `C64BOT_FULL_RACE` set to 1, and only when it's really needed (the rules changed in a way the short race can't vouch for, or the owner asks). In the app's console, T and L save and load a state, R and D compare RAM, and G prints the game state. VICE is a GUI program, so PowerShell doesn't wait for it: the terminal is free again as soon as VICE starts.
 
 ## Conventions
 

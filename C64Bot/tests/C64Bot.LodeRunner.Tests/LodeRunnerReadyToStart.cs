@@ -30,5 +30,19 @@ public sealed class LodeRunnerReadyToStart : IDisposable
 
     public LevelDisk Levels => _levels ?? throw new InvalidOperationException("The core or the disk isn't there.");
 
+    // Runs until the level is set up and waits for the first move, about 490 frames after StartLevel, or 640 if the
+    // game reads the level from the disk.
+    public void RunUntilSetUp()
+    {
+        for (var frame = 0; frame < 1200; frame++)
+        {
+            Core.RunFrame();
+            if (GameState.TryRead(Core.SystemRam, out var state) && state is { Alive: true, Completed: false })
+                return;
+        }
+
+        Assert.Fail("The level wasn't set up.");
+    }
+
     public void Dispose() => _core?.Dispose();
 }
