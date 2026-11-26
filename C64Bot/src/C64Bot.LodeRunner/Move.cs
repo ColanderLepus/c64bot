@@ -80,12 +80,12 @@ public sealed class Move
     // Holds the joystick that way until he's in the middle of a tile he wasn't in the middle of, or stopped.
     private static Move? Go(GameState start, MoveKind kind, Joystick joystick)
     {
-        var run = new Run(start);
+        var moving = new Moving(start);
         var before = start;
         while (true)
         {
-            run.Pass(joystick);
-            var state = run.State;
+            moving.Pass(joystick);
+            var state = moving.State;
             if (!state.Alive || state.Completed)
                 break;
 
@@ -99,36 +99,36 @@ public sealed class Move
             before = state;
         }
 
-        return run.ToMove(kind);
+        return moving.ToMove(kind);
     }
 
     // Holds fire until the hole is open, after a step that way to turn him if he isn't facing it.
     private static Move? Dig(GameState start, Direction side)
     {
-        var run = new Run(start);
+        var moving = new Moving(start);
         if (start.Player.DigSide != side)
         {
-            run.Pass(side == Direction.Left ? Joystick.Left : Joystick.Right);
-            if (run.State.Player.DigSide != side)
+            moving.Pass(side == Direction.Left ? Joystick.Left : Joystick.Right);
+            if (moving.State.Player.DigSide != side)
                 return null;
         }
 
-        var (column, row) = run.State.Player.Position;
+        var (column, row) = moving.State.Player.Position;
         var hole = new TilePosition(column + (side == Direction.Left ? -1 : 1), row + 1);
-        if (run.State.Holes.Any(open => open.Position == hole))
+        if (moving.State.Holes.Any(open => open.Position == hole))
             return null;
 
         do
         {
-            run.Pass(Joystick.Fire);
+            moving.Pass(Joystick.Fire);
         }
-        while (run.State.Alive && run.State.Player.Digging is not null);
+        while (moving.State.Alive && moving.State.Player.Digging is not null);
 
         // The dig stops at once if it isn't possible there, and the hole is there only if it went all the way.
-        if (run.State.Holes.All(open => open.Position != hole))
+        if (moving.State.Holes.All(open => open.Position != hole))
             return null;
 
-        return run.ToMove(side == Direction.Left ? MoveKind.DigLeft : MoveKind.DigRight);
+        return moving.ToMove(side == Direction.Left ? MoveKind.DigLeft : MoveKind.DigRight);
     }
 
     private static Move? WaitForHole(GameState start)
@@ -136,24 +136,24 @@ public sealed class Move
         if (start.Holes.Count == 0)
             return null;
 
-        var run = new Run(start);
+        var moving = new Moving(start);
         var closes = start.Holes.Min(hole => hole.PassesLeft);
-        while (run.Passes.Count < closes)
-            run.Pass(Joystick.None);
+        while (moving.Passes.Count < closes)
+            moving.Pass(Joystick.None);
 
-        return run.ToMove(MoveKind.WaitForHole);
+        return moving.ToMove(MoveKind.WaitForHole);
     }
 
     private static Move? Fall(GameState start)
     {
-        var run = new Run(start);
+        var moving = new Moving(start);
         do
         {
-            run.Pass(Joystick.None);
+            moving.Pass(Joystick.None);
         }
-        while (run.State.Alive && !run.State.Completed && !JoystickDecides(run.State));
+        while (moving.State.Alive && !moving.State.Completed && !JoystickDecides(moving.State));
 
-        return run.ToMove(MoveKind.Fall);
+        return moving.ToMove(MoveKind.Fall);
     }
 
     // Whether the joystick decides what he does in the next pass: he won't fall or dig in it. He can still be falling
@@ -168,7 +168,7 @@ public sealed class Move
         == (before.Player.Position, before.Player.OffsetX, before.Player.OffsetY);
 
     // The passes of a move so far, and the state after them.
-    private sealed class Run(GameState start)
+    private sealed class Moving(GameState start)
     {
         private readonly TilePosition _from = start.Player.Position;
         private readonly List<Joystick> _passes = [];
